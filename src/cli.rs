@@ -400,58 +400,6 @@ fn parse_repo_clone_args(args: &[String]) -> Result<RepoCloneRequest, CommandErr
     })
 }
 
-fn parse_pr_view_args(args: &[String]) -> Result<PrViewRequest, CommandError> {
-    let mut output = OutputFormat::Text;
-    let mut repo = None;
-    let mut number = None;
-    let mut index = 0;
-
-    while index < args.len() {
-        match args[index].as_str() {
-            "--json" => {
-                output = OutputFormat::Json;
-                index += 1;
-            }
-            "--repo" => {
-                let Some(value) = args.get(index + 1) else {
-                    return Err(CommandError::usage("missing value for --repo"));
-                };
-                repo = Some(value.clone());
-                index += 2;
-            }
-            value if value.starts_with("--") => {
-                return Err(CommandError::usage("unsupported command"));
-            }
-            value => {
-                if number.is_some() {
-                    return Err(CommandError::usage(
-                        "pr view accepts exactly one pull request number",
-                    ));
-                }
-
-                let parsed = value.parse::<u64>().map_err(|_| {
-                    CommandError::usage("invalid pull request number: expected a positive integer")
-                })?;
-
-                number = Some(parsed);
-                index += 1;
-            }
-        }
-    }
-
-    let Some(number) = number else {
-        return Err(CommandError::usage(
-            "pr view requires a pull request number",
-        ));
-    };
-
-    Ok(PrViewRequest {
-        output,
-        repo,
-        number,
-    })
-}
-
 fn parse_pr_comment_args(args: &[String]) -> Result<PrCommentRequest, CommandError> {
     let mut output = OutputFormat::Text;
     let mut repo = None;
