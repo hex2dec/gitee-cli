@@ -53,9 +53,22 @@ Use `gitee-cli` if you want:
 - write operations that accept flags, files, or stdin instead of prompts
 - predictable behavior that can be scripted safely
 
-## Start Here
+## Install
 
-Today the project is built from source.
+Tagged GitHub releases publish prebuilt binaries for:
+
+- Apple Silicon macOS: `aarch64-apple-darwin`
+- Linux x86_64: `x86_64-unknown-linux-musl`
+
+Download the matching archive from the GitHub Releases page, extract it, and
+place `gitee` somewhere on your `PATH`.
+
+Each release also includes `gitee-<version>-checksums.txt`.
+
+## Build From Source
+
+If you need a development build or a platform outside the published release
+assets, build from source:
 
 Build the binary locally:
 

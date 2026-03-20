@@ -53,9 +53,21 @@ gitee help --json
 - 写操作通过参数、文件或 stdin 提供内容，而不是依赖交互式提示
 - 行为稳定、便于脚本安全调用
 
-## 从这里开始
+## 安装
 
-当前项目通过源码构建。
+打了 tag 的 GitHub Release 会提供以下预构建二进制：
+
+- Apple Silicon macOS：`aarch64-apple-darwin`
+- Linux x86_64：`x86_64-unknown-linux-musl`
+
+从 GitHub Releases 页面下载对应平台的压缩包，解压后将 `gitee` 放到你的
+`PATH` 中即可。
+
+每个 release 还会额外提供 `gitee-<version>-checksums.txt`。
+
+## 从源码构建
+
+如果你需要开发版，或者目标平台不在当前发布资产范围内，可以从源码构建：
 
 本地构建二进制：
 
