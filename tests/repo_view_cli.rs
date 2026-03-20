@@ -24,7 +24,7 @@ fn repo_view_supports_explicit_repo_slug_in_json_output() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_BASE_URL", server.base_url())
         .args(["repo", "view", "--repo", "octo/demo", "--json"])
@@ -66,7 +66,7 @@ fn repo_view_handles_private_repo_payload_without_clone_url() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_BASE_URL", server.base_url())
         .args(["repo", "view", "--repo", "hzw-dev/tip-ucan", "--json"])
@@ -106,7 +106,7 @@ fn repo_view_infers_repository_and_current_branch_from_https_origin() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(repo_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -147,7 +147,7 @@ fn repo_view_infers_repository_from_ssh_origin() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(repo_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -198,7 +198,7 @@ fn repo_view_resolves_human_name_remote_to_canonical_private_repo() {
         ]));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(repo_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -239,7 +239,7 @@ fn repo_view_renders_stable_text_output() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_BASE_URL", server.base_url())
         .args(["repo", "view", "--repo", "octo/demo"])
@@ -268,7 +268,7 @@ source: explicit"
 fn repo_view_fails_with_a_stable_git_error_when_head_is_detached() {
     let repo_dir = git_repo_with_detached_head("https://gitee.com/octo/demo.git");
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(repo_dir.path())
         .args(["repo", "view", "--json"])
@@ -287,7 +287,7 @@ fn repo_view_fails_with_a_stable_git_error_when_head_is_detached() {
 fn repo_view_fails_when_not_inside_a_git_repository() {
     let working_dir = TempDir::new().unwrap();
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(working_dir.path())
         .args(["repo", "view", "--json"])

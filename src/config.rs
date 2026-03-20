@@ -4,6 +4,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+const CONFIG_DIR_NAME: &str = "gitee";
+const FALLBACK_CONFIG_DIR_NAME: &str = ".gitee";
+
 pub struct ConfigStore {
     config_dir: PathBuf,
 }
@@ -124,17 +127,17 @@ fn config_dir() -> PathBuf {
     if let Ok(path) = env::var("XDG_CONFIG_HOME") {
         let path = path.trim();
         if !path.is_empty() {
-            return PathBuf::from(path).join("gitee-cli");
+            return PathBuf::from(path).join(CONFIG_DIR_NAME);
         }
     }
 
     if let Some(home_dir) = home_dir() {
-        return home_dir.join(".config").join("gitee-cli");
+        return home_dir.join(".config").join(CONFIG_DIR_NAME);
     }
 
     env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".gitee-cli")
+        .join(FALLBACK_CONFIG_DIR_NAME)
 }
 
 fn home_dir() -> Option<PathBuf> {
