@@ -5,9 +5,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 const CONFIG_DIR_NAME: &str = "gitee";
-const LEGACY_CONFIG_DIR_NAME: &str = "gitee-cli";
 const FALLBACK_CONFIG_DIR_NAME: &str = ".gitee";
-const LEGACY_FALLBACK_CONFIG_DIR_NAME: &str = ".gitee-cli";
 
 pub struct ConfigStore {
     config_dir: PathBuf,
@@ -129,33 +127,17 @@ fn config_dir() -> PathBuf {
     if let Ok(path) = env::var("XDG_CONFIG_HOME") {
         let path = path.trim();
         if !path.is_empty() {
-            return select_config_dir(
-                PathBuf::from(path).join(CONFIG_DIR_NAME),
-                PathBuf::from(path).join(LEGACY_CONFIG_DIR_NAME),
-            );
+            return PathBuf::from(path).join(CONFIG_DIR_NAME);
         }
     }
 
     if let Some(home_dir) = home_dir() {
-        return select_config_dir(
-            home_dir.join(".config").join(CONFIG_DIR_NAME),
-            home_dir.join(".config").join(LEGACY_CONFIG_DIR_NAME),
-        );
+        return home_dir.join(".config").join(CONFIG_DIR_NAME);
     }
 
-    let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    select_config_dir(
-        current_dir.join(FALLBACK_CONFIG_DIR_NAME),
-        current_dir.join(LEGACY_FALLBACK_CONFIG_DIR_NAME),
-    )
-}
-
-fn select_config_dir(preferred: PathBuf, legacy: PathBuf) -> PathBuf {
-    if preferred.exists() || !legacy.exists() {
-        preferred
-    } else {
-        legacy
-    }
+    env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(FALLBACK_CONFIG_DIR_NAME)
 }
 
 fn home_dir() -> Option<PathBuf> {
