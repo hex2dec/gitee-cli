@@ -2,6 +2,8 @@ use assert_cmd::Command;
 use httpmock::Method::{GET, POST};
 use httpmock::MockServer;
 use serde_json::Value;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command as ProcessCommand;
 use tempfile::TempDir;
@@ -590,6 +592,51 @@ fn issue_comment_rejects_missing_body_file() {
             "octo/demo",
             "--body-file",
             missing_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .trim()
+            .starts_with("failed to read comment body file: ")
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[cfg(unix)]
+#[test]
+fn issue_comment_rejects_unreadable_body_file() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let body_path = temp_dir.path().join("comment.txt");
+    std::fs::write(&body_path, "Posted from file").unwrap();
+
+    let mut permissions = std::fs::metadata(&body_path).unwrap().permissions();
+    permissions.set_mode(0o000);
+    std::fs::set_permissions(&body_path, permissions).unwrap();
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body-file",
+            body_path.to_str().unwrap(),
         ])
         .output()
         .unwrap();
