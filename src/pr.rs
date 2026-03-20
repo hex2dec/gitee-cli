@@ -1,13 +1,14 @@
 use std::fs;
 use std::io::{self, Read};
+use std::process::Command as ProcessCommand;
 
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
 use crate::gitee_api::{
-    CreatePullRequestComment, GiteeClient, PullRequest, PullRequestComment, PullRequestError,
-    PullRequestListFilters, RepoError,
+    CreatePullRequest, CreatePullRequestComment, GiteeClient, PullRequest, PullRequestComment,
+    PullRequestError, PullRequestListFilters, RepoError,
 };
 use crate::repo_context::infer_repo_context;
 
@@ -84,6 +85,51 @@ impl PrService {
             self.fetch_pull_requests_with_fallback(&repo, &request.filters, token.as_deref())?;
 
         Ok(render_pr_list(request.output, &repo, pull_requests))
+    }
+
+    pub fn create(&self, request: PrCreateRequest) -> Result<CommandOutcome, CommandError> {
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: crate::command::EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for pr create".to_string()),
+            })?
+            .token;
+
+        let repo = match request.repo.as_deref() {
+            Some(repo) => resolve_repo(Some(repo))?,
+            None => resolve_repo(None)?,
+        };
+        let head = resolve_create_head(&repo, request.head.as_deref(), request.repo.is_some())?;
+        let base = match request.base {
+            Some(base) => base,
+            None => {
+                self.client
+                    .fetch_repository(&repo.owner, &repo.name, Some(&token))
+                    .map_err(map_repo_error)?
+                    .default_branch
+            }
+        };
+        let body = read_optional_body(request.body)?;
+        let pull_request = self
+            .client
+            .create_pull_request(
+                &repo.owner,
+                &repo.name,
+                &token,
+                &CreatePullRequest {
+                    title: &request.title,
+                    head: &head,
+                    base: &base,
+                    body: body.as_deref(),
+                },
+            )
+            .map_err(map_pull_request_error)?;
+
+        Ok(render_pr_create(request.output, pull_request))
     }
 
     pub fn status(&self, request: PrStatusRequest) -> Result<CommandOutcome, CommandError> {
@@ -297,6 +343,15 @@ pub struct PrCommentRequest {
     pub body: PrTextSource,
 }
 
+pub struct PrCreateRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub head: Option<String>,
+    pub base: Option<String>,
+    pub title: String,
+    pub body: Option<PrTextSource>,
+}
+
 pub struct PrListRequest {
     pub output: OutputFormat,
     pub repo: Option<String>,
@@ -452,6 +507,25 @@ fn render_pr_comment(
     }
 }
 
+fn render_pr_create(output: OutputFormat, pull_request: PullRequest) -> CommandOutcome {
+    match output {
+        OutputFormat::Json => render_pr_view(OutputFormat::Json, pull_request),
+        OutputFormat::Text => CommandOutcome::text(
+            EXIT_OK,
+            format!(
+                "Created pull request #{}\nrepository: {}\nhead: {}:{}\nbase: {}:{}\nurl: {}",
+                pull_request.number,
+                pull_request.repository,
+                pull_request.head.repository,
+                pull_request.head.r#ref,
+                pull_request.base.repository,
+                pull_request.base.r#ref,
+                pull_request.html_url,
+            ),
+        ),
+    }
+}
+
 fn render_pr_list(
     output: OutputFormat,
     repo: &ResolvedRepo,
@@ -565,6 +639,111 @@ fn read_required_body(body: PrTextSource) -> Result<String, CommandError> {
     Ok(body)
 }
 
+fn resolve_create_head(
+    repo: &ResolvedRepo,
+    explicit_head: Option<&str>,
+    repo_is_explicit: bool,
+) -> Result<String, CommandError> {
+    if let Some(head) = explicit_head {
+        return Ok(head.to_string());
+    }
+
+    let context = infer_repo_context()
+        .map_err(|err| CommandError::git(format!("git context error: {err}")))?;
+
+    if repo_is_explicit && (context.owner != repo.owner || context.name != repo.name) {
+        return Err(CommandError::git(
+            "git context error: current repository does not match --repo",
+        ));
+    }
+
+    ensure_current_branch_is_pushed_to_origin(&context.current_branch)?;
+    Ok(context.current_branch)
+}
+
+fn ensure_current_branch_is_pushed_to_origin(branch: &str) -> Result<(), CommandError> {
+    let Some(remote) = git_config(&format!("branch.{branch}.remote"))? else {
+        return Err(CommandError::git(
+            "git context error: current branch is not pushed to origin",
+        ));
+    };
+
+    if remote != "origin" {
+        return Err(CommandError::git(format!(
+            "git context error: current branch tracks remote `{remote}`, expected origin",
+        )));
+    }
+
+    let expected_merge = format!("refs/heads/{branch}");
+    let Some(merge_ref) = git_config(&format!("branch.{branch}.merge"))? else {
+        return Err(CommandError::git(
+            "git context error: current branch is not pushed to origin",
+        ));
+    };
+
+    if merge_ref != expected_merge {
+        return Err(CommandError::git(format!(
+            "git context error: current branch tracks `{merge_ref}`, expected {expected_merge}",
+        )));
+    }
+
+    if !git_ref_exists(&format!("refs/remotes/origin/{branch}"))? {
+        return Err(CommandError::git(
+            "git context error: current branch is not pushed to origin",
+        ));
+    }
+
+    Ok(())
+}
+
+fn git_config(key: &str) -> Result<Option<String>, CommandError> {
+    let output = ProcessCommand::new("git")
+        .args(["config", "--get", key])
+        .output()
+        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
+
+    if output.status.success() {
+        return Ok(Some(
+            String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        ));
+    }
+
+    if output.status.code() == Some(1) {
+        return Ok(None);
+    }
+
+    Err(CommandError::git(format!(
+        "git context error: failed to read git config `{key}`"
+    )))
+}
+
+fn git_ref_exists(reference: &str) -> Result<bool, CommandError> {
+    let output = ProcessCommand::new("git")
+        .args(["show-ref", "--verify", "--quiet", reference])
+        .output()
+        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
+
+    if output.status.success() {
+        return Ok(true);
+    }
+
+    if output.status.code() == Some(1) {
+        return Ok(false);
+    }
+
+    Err(CommandError::git(format!(
+        "git context error: failed to inspect git reference `{reference}`"
+    )))
+}
+
+fn read_optional_body(body: Option<PrTextSource>) -> Result<Option<String>, CommandError> {
+    match body {
+        Some(PrTextSource::Inline(value)) => Ok(Some(value)),
+        Some(PrTextSource::File(path)) => read_body_from_file(&path).map(Some),
+        None => Ok(None),
+    }
+}
+
 fn read_body_from_file(path: &str) -> Result<String, CommandError> {
     if path == "-" {
         let mut body = String::new();
@@ -596,6 +775,11 @@ fn map_pull_request_error(error: PullRequestError) -> CommandError {
             stderr: Some(format!(
                 "remote request returned unexpected status: {status}"
             )),
+        },
+        PullRequestError::UnexpectedStatusWithMessage(status, message) => CommandError {
+            code: EXIT_REMOTE,
+            stdout: None,
+            stderr: Some(format!("remote request failed ({status}): {message}")),
         },
         PullRequestError::NotFound => CommandError::not_found("pull request not found"),
     }

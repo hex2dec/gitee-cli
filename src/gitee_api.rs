@@ -1,7 +1,7 @@
 use std::env;
 
 use reqwest::blocking::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub struct GiteeClient {
     client: Client,
@@ -10,6 +10,33 @@ pub struct GiteeClient {
 
 pub struct CreatePullRequestComment<'a> {
     pub body: &'a str,
+}
+
+pub struct CreatePullRequest<'a> {
+    pub title: &'a str,
+    pub head: &'a str,
+    pub base: &'a str,
+    pub body: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+struct CreatePullRequestPayload<'a> {
+    access_token: &'a str,
+    title: &'a str,
+    head: &'a str,
+    base: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<&'a str>,
+}
+
+#[derive(Deserialize)]
+struct ApiErrorResponse {
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
 }
 
 impl GiteeClient {
@@ -418,6 +445,53 @@ impl GiteeClient {
             response.status().as_u16(),
         ))
     }
+
+    pub fn create_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        token: &str,
+        request: &CreatePullRequest<'_>,
+    ) -> Result<PullRequest, PullRequestError> {
+        let response = self
+            .client
+            .post(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url))
+            .json(&CreatePullRequestPayload {
+                access_token: token,
+                title: request.title,
+                head: request.head,
+                base: request.base,
+                body: request.body,
+            })
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            let pull_request = response
+                .json::<PullRequestResponse>()
+                .map_err(PullRequestError::Transport)?;
+            return Ok(pull_request.into_pull_request(owner, repo));
+        }
+
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if status == 401 {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if status == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
+    }
 }
 
 fn resolve_base_url(value: Option<String>) -> String {
@@ -452,6 +526,7 @@ pub enum PullRequestError {
     NotFound,
     Transport(reqwest::Error),
     UnexpectedStatus(u16),
+    UnexpectedStatusWithMessage(u16, String),
 }
 
 #[derive(Clone)]
@@ -771,6 +846,22 @@ fn normalize_html_url(value: &str, full_name: &str) -> String {
     }
 
     value.trim_end_matches(".git").to_string()
+}
+
+fn parse_api_error_message(response: reqwest::blocking::Response) -> Option<String> {
+    let body = response.text().ok()?;
+    if body.trim().is_empty() {
+        return None;
+    }
+
+    if let Ok(payload) = serde_json::from_str::<ApiErrorResponse>(&body) {
+        return payload
+            .message
+            .or(payload.error_description)
+            .or(payload.error);
+    }
+
+    Some(body)
 }
 
 #[cfg(test)]
