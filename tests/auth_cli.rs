@@ -44,7 +44,10 @@ fn auth_status_supports_default_text_output_without_json_flag() {
         .unwrap();
 
     assert_eq!(output.status.code(), Some(3));
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Not authenticated");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "Not authenticated"
+    );
     assert!(String::from_utf8_lossy(&output.stderr).trim().is_empty());
 }
 
