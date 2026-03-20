@@ -1,3 +1,7 @@
+use std::fs;
+use std::io::{self, Read};
+use std::path::PathBuf;
+
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_AUTH, EXIT_OK, EXIT_REMOTE, OutputFormat};
@@ -104,6 +108,42 @@ impl IssueService {
             },
         ))
     }
+
+    pub fn comment(&self, request: IssueCommentRequest) -> Result<CommandOutcome, CommandError> {
+        let resolved = resolve_issue_repo(request.repo.as_deref())?;
+        let body = read_comment_body(request.body)?;
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for issue comment".to_string()),
+            })?
+            .token;
+        let comment = self
+            .client
+            .create_issue_comment(
+                &resolved.owner,
+                &resolved.name,
+                &request.number,
+                &token,
+                &body,
+            )
+            .map_err(|error| map_issue_error(error, "issue not found"))?;
+
+        Ok(render_issue_comment(
+            request.output,
+            IssueCommentView {
+                source: resolved.source,
+                owner: resolved.owner,
+                name: resolved.name,
+                number: request.number,
+                comment,
+            },
+        ))
+    }
 }
 
 pub struct IssueListRequest {
@@ -122,6 +162,19 @@ pub struct IssueViewRequest {
     pub comments: bool,
     pub page: u32,
     pub per_page: u32,
+}
+
+pub struct IssueCommentRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub number: String,
+    pub body: IssueCommentBodySource,
+}
+
+pub enum IssueCommentBodySource {
+    Flag(String),
+    File(PathBuf),
+    Stdin,
 }
 
 #[derive(Clone, Copy)]
@@ -172,6 +225,14 @@ struct IssueView {
     comments_page: Option<u32>,
     comments_per_page: Option<u32>,
     comments: Option<Vec<IssueComment>>,
+}
+
+struct IssueCommentView {
+    source: &'static str,
+    owner: String,
+    name: String,
+    number: String,
+    comment: IssueComment,
 }
 
 struct ResolvedIssueRepo {
@@ -331,6 +392,39 @@ fn render_issue_view(output: OutputFormat, view: IssueView) -> CommandOutcome {
     }
 }
 
+fn render_issue_comment(output: OutputFormat, view: IssueCommentView) -> CommandOutcome {
+    match output {
+        OutputFormat::Json => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "source": view.source,
+                "owner": view.owner,
+                "name": view.name,
+                "number": view.number,
+                "id": view.comment.id,
+                "author": view.comment.author,
+                "body": view.comment.body,
+                "created_at": view.comment.created_at,
+                "updated_at": view.comment.updated_at,
+            }),
+        ),
+        OutputFormat::Text => CommandOutcome::text(
+            EXIT_OK,
+            [
+                format!("{}/{}#{}", view.owner, view.name, view.number),
+                format!("comment id: {}", view.comment.id),
+                format!("author: {}", view.comment.author),
+                format!("created at: {}", view.comment.created_at),
+                format!("updated at: {}", view.comment.updated_at),
+                format!("source: {}", view.source),
+                "body:".to_string(),
+                view.comment.body,
+            ]
+            .join("\n"),
+        ),
+    }
+}
+
 fn resolve_issue_repo(repo: Option<&str>) -> Result<ResolvedIssueRepo, CommandError> {
     match repo {
         Some(repo) => {
@@ -352,6 +446,28 @@ fn resolve_issue_repo(repo: Option<&str>) -> Result<ResolvedIssueRepo, CommandEr
             })
         }
     }
+}
+
+fn read_comment_body(source: IssueCommentBodySource) -> Result<String, CommandError> {
+    let body = match source {
+        IssueCommentBodySource::Flag(body) => body,
+        IssueCommentBodySource::File(path) => fs::read_to_string(path).map_err(|err| {
+            CommandError::usage(format!("failed to read comment body file: {err}"))
+        })?,
+        IssueCommentBodySource::Stdin => {
+            let mut input = String::new();
+            io::stdin().read_to_string(&mut input).map_err(|err| {
+                CommandError::usage(format!("failed to read comment body from stdin: {err}"))
+            })?;
+            input
+        }
+    };
+
+    if body.trim().is_empty() {
+        return Err(CommandError::usage("comment body cannot be empty"));
+    }
+
+    Ok(body)
 }
 
 fn map_issue_list_error(error: IssueError) -> CommandError {
