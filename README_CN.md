@@ -11,6 +11,16 @@ AI 驱动的工作流中操作 `gitee.com`。
 
 安装后的可执行文件名为 `gitee`。
 
+如果是给 Agent 或大模型做能力发现，建议从下面这条命令开始：
+
+```bash
+gitee help --json
+```
+
+它会返回一份机器可读的能力清单，包含已支持的命令组、子命令、参数、示例
+以及与 `gh` 相近的命令映射。如果只想查看单个命令，可以使用
+`gitee help pr create --json` 这样的 topic path。
+
 > `gitee-cli` 是一个非官方社区项目，与 Gitee 或 `gitee.com` 不存在关
 > 联关系，也未获得其认可、背书或赞助。
 >

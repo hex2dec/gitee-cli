@@ -31,6 +31,7 @@ pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
 
     match command.as_str() {
         "auth" => run_auth(rest),
+        "help" => run_help(rest),
         "issue" => run_issue(rest),
         "pr" => run_pr(rest),
         "repo" => run_repo(rest),
@@ -122,6 +123,114 @@ fn run_repo(args: &[String]) -> Result<CommandOutcome, CommandError> {
         "clone" => execute_parsed(parse_repo_clone_args(rest), |request| repo.clone(request)),
         "view" => execute_parsed(parse_repo_view_args(rest), |request| repo.view(request)),
         _ => Err(CommandError::usage("unsupported command")),
+    }
+}
+
+fn run_help(args: &[String]) -> Result<CommandOutcome, CommandError> {
+    execute_parsed(parse_matches(help_command(), args), |matches| {
+        let output = output_format(&matches);
+        let topics = values(&matches, "topics");
+        let Some(topic) = resolve_help_topic(&topics) else {
+            return Err(CommandError::usage("unknown help topic"));
+        };
+
+        match output {
+            OutputFormat::Text => Ok(render_help((topic.text_command)())),
+            OutputFormat::Json => Ok(CommandOutcome::json(EXIT_OK, (topic.json)())),
+        }
+    })
+}
+
+struct HelpTopic {
+    text_command: fn() -> Command,
+    json: fn() -> serde_json::Value,
+}
+
+fn resolve_help_topic(path: &[String]) -> Option<HelpTopic> {
+    let path = path.iter().map(String::as_str).collect::<Vec<_>>();
+
+    match path.as_slice() {
+        [] => Some(HelpTopic {
+            text_command: root_help_command,
+            json: root_help_json,
+        }),
+        ["auth"] => Some(HelpTopic {
+            text_command: auth_help_command,
+            json: auth_help_json,
+        }),
+        ["auth", "login"] => Some(HelpTopic {
+            text_command: auth_login_command,
+            json: auth_login_help_json,
+        }),
+        ["auth", "logout"] => Some(HelpTopic {
+            text_command: auth_logout_command,
+            json: auth_logout_help_json,
+        }),
+        ["auth", "status"] => Some(HelpTopic {
+            text_command: auth_status_command,
+            json: auth_status_help_json,
+        }),
+        ["issue"] => Some(HelpTopic {
+            text_command: issue_help_command,
+            json: issue_help_json,
+        }),
+        ["issue", "comment"] => Some(HelpTopic {
+            text_command: issue_comment_command,
+            json: issue_comment_help_json,
+        }),
+        ["issue", "create"] => Some(HelpTopic {
+            text_command: issue_create_command,
+            json: issue_create_help_json,
+        }),
+        ["issue", "list"] => Some(HelpTopic {
+            text_command: issue_list_command,
+            json: issue_list_help_json,
+        }),
+        ["issue", "view"] => Some(HelpTopic {
+            text_command: issue_view_command,
+            json: issue_view_help_json,
+        }),
+        ["pr"] => Some(HelpTopic {
+            text_command: pr_help_command,
+            json: pr_help_json,
+        }),
+        ["pr", "checkout"] => Some(HelpTopic {
+            text_command: pr_checkout_command,
+            json: pr_checkout_help_json,
+        }),
+        ["pr", "comment"] => Some(HelpTopic {
+            text_command: pr_comment_command,
+            json: pr_comment_help_json,
+        }),
+        ["pr", "create"] => Some(HelpTopic {
+            text_command: pr_create_command,
+            json: pr_create_help_json,
+        }),
+        ["pr", "list"] => Some(HelpTopic {
+            text_command: pr_list_command,
+            json: pr_list_help_json,
+        }),
+        ["pr", "status"] => Some(HelpTopic {
+            text_command: pr_status_command,
+            json: pr_status_help_json,
+        }),
+        ["pr", "view"] => Some(HelpTopic {
+            text_command: pr_view_command,
+            json: pr_view_help_json,
+        }),
+        ["repo"] => Some(HelpTopic {
+            text_command: repo_help_command,
+            json: repo_help_json,
+        }),
+        ["repo", "clone"] => Some(HelpTopic {
+            text_command: repo_clone_command,
+            json: repo_clone_help_json,
+        }),
+        ["repo", "view"] => Some(HelpTopic {
+            text_command: repo_view_command,
+            json: repo_view_help_json,
+        }),
+        _ => None,
     }
 }
 
@@ -686,7 +795,11 @@ fn is_help_flag(arg: &str) -> bool {
 }
 
 fn root_help_command() -> Command {
-    base_command("gitee")
+    base_command("gitee", "gitee")
+        .about("Agent-first CLI for gitee.com")
+        .after_help(
+            "Examples:\n  gitee auth status --json\n  gitee repo view --repo octo/demo --json\n  gitee help --json\n\nAgent discovery:\n  Use `gitee help --json` to inspect commands, flags, examples, and gh-style equivalents.",
+        )
         .subcommand(auth_help_command())
         .subcommand(issue_help_command())
         .subcommand(pr_help_command())
@@ -694,14 +807,16 @@ fn root_help_command() -> Command {
 }
 
 fn auth_help_command() -> Command {
-    base_command("auth")
+    base_command("auth", "gitee auth")
+        .about("Authenticate with gitee.com and inspect login state")
         .subcommand(auth_status_command())
         .subcommand(auth_login_command())
         .subcommand(auth_logout_command())
 }
 
 fn issue_help_command() -> Command {
-    base_command("issue")
+    base_command("issue", "gitee issue")
+        .about("Read, create, and comment on issues")
         .subcommand(issue_create_command())
         .subcommand(issue_comment_command())
         .subcommand(issue_list_command())
@@ -709,7 +824,8 @@ fn issue_help_command() -> Command {
 }
 
 fn pr_help_command() -> Command {
-    base_command("pr")
+    base_command("pr", "gitee pr")
+        .about("View, create, comment on, and check out pull requests")
         .subcommand(pr_checkout_command())
         .subcommand(pr_comment_command())
         .subcommand(pr_create_command())
@@ -719,159 +835,1101 @@ fn pr_help_command() -> Command {
 }
 
 fn repo_help_command() -> Command {
-    base_command("repo")
+    base_command("repo", "gitee repo")
+        .about("Inspect and clone repositories")
         .subcommand(repo_clone_command())
         .subcommand(repo_view_command())
 }
 
 fn auth_status_command() -> Command {
-    output_only_command("status")
+    output_only_command("status", "gitee auth status")
+        .about("Check whether authentication is currently usable")
 }
 
 fn auth_login_command() -> Command {
-    base_command("login")
+    base_command("login", "gitee auth login")
+        .about("Validate and save a personal access token")
         .arg(json_flag())
-        .arg(string_option("token", "token", "TOKEN"))
-        .arg(count_flag("with_token", "with-token"))
+        .arg(string_option(
+            "token",
+            "token",
+            "TOKEN",
+            "Personal access token to validate and save",
+        ))
+        .arg(count_flag(
+            "with_token",
+            "with-token",
+            "Read the token from stdin instead of a flag",
+        ))
 }
 
 fn auth_logout_command() -> Command {
-    output_only_command("logout")
+    output_only_command("logout", "gitee auth logout")
+        .about("Remove the saved token from local config")
 }
 
 fn issue_list_command() -> Command {
-    base_command("list")
+    base_command("list", "gitee issue list")
+        .about("List issues for a repository")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(string_option("state", "state", "STATE"))
-        .arg(string_option("search", "search", "SEARCH"))
-        .arg(string_option("page", "page", "PAGE"))
-        .arg(string_option("per_page", "per-page", "PER_PAGE"))
+        .arg(repo_option())
+        .arg(string_option(
+            "state",
+            "state",
+            "STATE",
+            "Filter issues by state: open, closed, or all",
+        ))
+        .arg(string_option(
+            "search",
+            "search",
+            "SEARCH",
+            "Filter issues by keyword text",
+        ))
+        .arg(string_option(
+            "page",
+            "page",
+            "PAGE",
+            "1-based page number to request",
+        ))
+        .arg(string_option(
+            "per_page",
+            "per-page",
+            "PER_PAGE",
+            "Number of issues to return per page",
+        ))
 }
 
 fn issue_view_command() -> Command {
-    base_command("view")
+    base_command("view", "gitee issue view")
+        .about("View a single issue and optionally include comments")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(count_flag("comments", "comments"))
-        .arg(string_option("page", "page", "PAGE"))
-        .arg(string_option("per_page", "per-page", "PER_PAGE"))
-        .arg(positionals_arg())
+        .arg(repo_option())
+        .arg(count_flag(
+            "comments",
+            "comments",
+            "Include issue comments in the response",
+        ))
+        .arg(string_option(
+            "page",
+            "page",
+            "PAGE",
+            "1-based page number for comment pagination",
+        ))
+        .arg(string_option(
+            "per_page",
+            "per-page",
+            "PER_PAGE",
+            "Number of comments to return per page",
+        ))
+        .arg(positionals_arg(
+            "positionals",
+            "ISSUE",
+            "Issue number or identifier, such as I123",
+        ))
 }
 
 fn issue_comment_command() -> Command {
-    base_command("comment")
+    base_command("comment", "gitee issue comment")
+        .about("Post a comment to an issue")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(string_option("body", "body", "BODY"))
-        .arg(string_option("body_file", "body-file", "PATH"))
-        .arg(positionals_arg())
+        .arg(repo_option())
+        .arg(string_option(
+            "body",
+            "body",
+            "BODY",
+            "Inline comment body text",
+        ))
+        .arg(string_option(
+            "body_file",
+            "body-file",
+            "PATH",
+            "Read comment body text from a file",
+        ))
+        .arg(positionals_arg(
+            "positionals",
+            "ISSUE",
+            "Issue number or identifier, such as I123",
+        ))
 }
 
 fn issue_create_command() -> Command {
-    base_command("create")
+    base_command("create", "gitee issue create")
+        .about("Create a new issue")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(string_option("title", "title", "TITLE"))
-        .arg(string_option("body", "body", "BODY"))
-        .arg(string_option("body_file", "body-file", "PATH"))
+        .arg(repo_option())
+        .arg(string_option("title", "title", "TITLE", "Issue title"))
+        .arg(string_option(
+            "body",
+            "body",
+            "BODY",
+            "Inline issue body text",
+        ))
+        .arg(string_option(
+            "body_file",
+            "body-file",
+            "PATH",
+            "Read issue body text from a file",
+        ))
 }
 
 fn pr_view_command() -> Command {
-    base_command("view")
+    base_command("view", "gitee pr view")
+        .about("View a single pull request")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(positionals_arg())
+        .arg(repo_option())
+        .arg(positionals_arg("positionals", "PR", "Pull request number"))
 }
 
 fn repo_view_command() -> Command {
-    output_only_command("view").arg(string_option("repo", "repo", "REPO"))
+    output_only_command("view", "gitee repo view")
+        .about("View repository metadata")
+        .arg(repo_option())
 }
 
 fn repo_clone_command() -> Command {
-    base_command("clone")
+    base_command("clone", "gitee repo clone")
+        .about("Clone a repository by owner/repo slug")
         .arg(json_flag())
-        .arg(count_flag("https", "https"))
-        .arg(count_flag("ssh", "ssh"))
-        .arg(positionals_arg())
+        .arg(count_flag("https", "https", "Clone over HTTPS (default)"))
+        .arg(count_flag("ssh", "ssh", "Clone over SSH"))
+        .arg(positionals_arg(
+            "positionals",
+            "ARG",
+            "Provide OWNER/REPO first, then an optional destination path",
+        ))
 }
 
 fn pr_comment_command() -> Command {
-    base_command("comment")
+    base_command("comment", "gitee pr comment")
+        .about("Post a comment to a pull request")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(string_option("body", "body", "BODY"))
-        .arg(string_option("body_file", "body-file", "PATH"))
-        .arg(positionals_arg())
+        .arg(repo_option())
+        .arg(string_option(
+            "body",
+            "body",
+            "BODY",
+            "Inline comment body text",
+        ))
+        .arg(string_option(
+            "body_file",
+            "body-file",
+            "PATH",
+            "Read comment body text from a file",
+        ))
+        .arg(positionals_arg("positionals", "PR", "Pull request number"))
 }
 
 fn pr_list_command() -> Command {
-    base_command("list")
+    base_command("list", "gitee pr list")
+        .about("List pull requests with filters")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(string_option("state", "state", "STATE"))
-        .arg(string_option("author", "author", "AUTHOR"))
-        .arg(string_option("assignee", "assignee", "ASSIGNEE"))
-        .arg(string_option("base", "base", "BASE"))
-        .arg(string_option("head", "head", "HEAD"))
-        .arg(string_option("limit", "limit", "LIMIT"))
+        .arg(repo_option())
+        .arg(string_option(
+            "state",
+            "state",
+            "STATE",
+            "Filter pull requests by state: open, closed, merged, or all",
+        ))
+        .arg(string_option(
+            "author",
+            "author",
+            "AUTHOR",
+            "Filter pull requests by author login",
+        ))
+        .arg(string_option(
+            "assignee",
+            "assignee",
+            "ASSIGNEE",
+            "Filter pull requests by assignee login",
+        ))
+        .arg(string_option(
+            "base",
+            "base",
+            "BASE",
+            "Filter pull requests by base branch",
+        ))
+        .arg(string_option(
+            "head",
+            "head",
+            "HEAD",
+            "Filter pull requests by head branch",
+        ))
+        .arg(string_option(
+            "limit",
+            "limit",
+            "LIMIT",
+            "Maximum number of pull requests to return",
+        ))
 }
 
 fn pr_create_command() -> Command {
-    base_command("create")
+    base_command("create", "gitee pr create")
+        .about("Create a pull request from the current branch or an explicit head")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(string_option("head", "head", "HEAD"))
-        .arg(string_option("base", "base", "BASE"))
-        .arg(string_option("title", "title", "TITLE"))
-        .arg(string_option("body", "body", "BODY"))
-        .arg(string_option("body_file", "body-file", "PATH"))
+        .arg(repo_option())
+        .arg(string_option(
+            "head",
+            "head",
+            "HEAD",
+            "Head branch to use instead of the current branch",
+        ))
+        .arg(string_option(
+            "base",
+            "base",
+            "BASE",
+            "Base branch to target",
+        ))
+        .arg(string_option(
+            "title",
+            "title",
+            "TITLE",
+            "Pull request title",
+        ))
+        .arg(string_option(
+            "body",
+            "body",
+            "BODY",
+            "Inline pull request body text",
+        ))
+        .arg(string_option(
+            "body_file",
+            "body-file",
+            "PATH",
+            "Read pull request body text from a file",
+        ))
 }
 
 fn pr_checkout_command() -> Command {
-    base_command("checkout")
+    base_command("checkout", "gitee pr checkout")
+        .about("Fetch and check out a pull request head branch")
         .arg(json_flag())
-        .arg(string_option("repo", "repo", "REPO"))
-        .arg(positionals_arg())
+        .arg(repo_option())
+        .arg(positionals_arg("positionals", "PR", "Pull request number"))
 }
 
 fn pr_status_command() -> Command {
-    base_command("status")
+    base_command("status", "gitee pr status")
+        .about("Show pull requests related to the current local checkout")
         .arg(json_flag())
-        .arg(string_option("state", "state", "STATE"))
-        .arg(string_option("limit", "limit", "LIMIT"))
+        .arg(string_option(
+            "state",
+            "state",
+            "STATE",
+            "Filter pull requests by state: open, closed, merged, or all",
+        ))
+        .arg(string_option(
+            "limit",
+            "limit",
+            "LIMIT",
+            "Maximum number of pull requests to return",
+        ))
 }
 
-fn output_only_command(name: &'static str) -> Command {
-    base_command(name).arg(json_flag())
+fn help_command() -> Command {
+    base_command("help", "gitee help")
+        .about("Show help for a command path or output machine-readable command metadata")
+        .after_help(
+            "Examples:\n  gitee help\n  gitee help --json\n  gitee help pr create\n  gitee help pr create --json",
+        )
+        .arg(json_flag())
+        .arg(positionals_arg(
+            "topics",
+            "TOPIC",
+            "Command path to inspect, such as `pr` or `pr create`",
+        ))
 }
 
-fn base_command(name: &'static str) -> Command {
-    Command::new(name).disable_version_flag(true)
+fn output_only_command(name: &'static str, bin_name: &'static str) -> Command {
+    base_command(name, bin_name).arg(json_flag())
+}
+
+fn base_command(name: &'static str, bin_name: &'static str) -> Command {
+    Command::new(name)
+        .bin_name(bin_name)
+        .disable_version_flag(true)
 }
 
 fn json_flag() -> Arg {
-    count_flag("json", "json")
+    count_flag("json", "json", "Output machine-readable JSON")
 }
 
-fn count_flag(id: &'static str, long: &'static str) -> Arg {
-    Arg::new(id).long(long).action(ArgAction::Count)
+fn count_flag(id: &'static str, long: &'static str, help: &'static str) -> Arg {
+    Arg::new(id).long(long).action(ArgAction::Count).help(help)
 }
 
-fn string_option(id: &'static str, long: &'static str, value_name: &'static str) -> Arg {
+fn string_option(
+    id: &'static str,
+    long: &'static str,
+    value_name: &'static str,
+    help: &'static str,
+) -> Arg {
     Arg::new(id)
         .long(long)
         .action(ArgAction::Append)
         .num_args(1)
         .value_name(value_name)
         .allow_hyphen_values(true)
+        .help(help)
 }
 
-fn positionals_arg() -> Arg {
-    Arg::new("positionals")
+fn repo_option() -> Arg {
+    string_option(
+        "repo",
+        "repo",
+        "REPO",
+        "Target repository as OWNER/REPO; defaults to local git context when supported",
+    )
+}
+
+fn positionals_arg(id: &'static str, value_name: &'static str, help: &'static str) -> Arg {
+    Arg::new(id)
         .index(1)
         .action(ArgAction::Append)
         .num_args(0..)
+        .value_name(value_name)
+        .help(help)
+}
+
+fn root_help_json() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "kind": "root",
+        "name": "gitee",
+        "path": "gitee",
+        "summary": "Agent-first CLI for gitee.com",
+        "agent_guidance": {
+            "recommended_discovery_command": "gitee help --json",
+            "mental_model": "The command surface is intentionally similar to GitHub gh for auth, repo, issue, and pr workflows."
+        },
+        "unsupported_command_groups": [
+            "api",
+            "release",
+            "label",
+            "workflow",
+            "notification"
+        ],
+        "commands": [
+            auth_help_json(),
+            issue_help_json(),
+            pr_help_json(),
+            repo_help_json()
+        ]
+    })
+}
+
+fn auth_help_json() -> serde_json::Value {
+    help_group_json(
+        "auth",
+        "auth",
+        "Authenticate with gitee.com and inspect login state",
+        "gh auth",
+        vec![
+            auth_status_help_json(),
+            auth_login_help_json(),
+            auth_logout_help_json(),
+        ],
+    )
+}
+
+fn auth_status_help_json() -> serde_json::Value {
+    help_command_json(
+        "status",
+        "auth status",
+        "Check whether authentication is currently usable",
+        "gh auth status",
+        true,
+        "not_required",
+        false,
+        false,
+        false,
+        vec![help_option_json(
+            "--json",
+            None,
+            "Output machine-readable JSON",
+            false,
+        )],
+        Vec::new(),
+        Vec::new(),
+        vec!["gitee auth status", "gitee auth status --json"],
+        vec!["Reads the token from GITEE_TOKEN first, then the saved config file."],
+    )
+}
+
+fn auth_login_help_json() -> serde_json::Value {
+    help_command_json(
+        "login",
+        "auth login",
+        "Validate and save a personal access token",
+        "gh auth login",
+        true,
+        "not_required",
+        false,
+        false,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            help_option_json(
+                "--token",
+                Some("TOKEN"),
+                "Personal access token to validate and save",
+                false,
+            ),
+            help_option_json(
+                "--with-token",
+                None,
+                "Read the token from stdin instead of a flag",
+                false,
+            ),
+        ],
+        Vec::new(),
+        vec!["--token", "--with-token (stdin)"],
+        vec![
+            "gitee auth login --token \"$GITEE_TOKEN\" --json",
+            "printf '%s\\n' \"$TOKEN\" | gitee auth login --with-token --json",
+        ],
+        vec!["Provide exactly one of --token or --with-token."],
+    )
+}
+
+fn auth_logout_help_json() -> serde_json::Value {
+    help_command_json(
+        "logout",
+        "auth logout",
+        "Remove the saved token from local config",
+        "gh auth logout",
+        true,
+        "not_required",
+        false,
+        false,
+        false,
+        vec![help_option_json(
+            "--json",
+            None,
+            "Output machine-readable JSON",
+            false,
+        )],
+        Vec::new(),
+        Vec::new(),
+        vec!["gitee auth logout --json"],
+        vec!["Clears the saved config token but does not unset GITEE_TOKEN."],
+    )
+}
+
+fn issue_help_json() -> serde_json::Value {
+    help_group_json(
+        "issue",
+        "issue",
+        "Read, create, and comment on issues",
+        "gh issue",
+        vec![
+            issue_create_help_json(),
+            issue_comment_help_json(),
+            issue_list_help_json(),
+            issue_view_help_json(),
+        ],
+    )
+}
+
+fn issue_list_help_json() -> serde_json::Value {
+    help_command_json(
+        "list",
+        "issue list",
+        "List issues for a repository",
+        "gh issue list",
+        true,
+        "optional",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json(
+                "--state",
+                Some("STATE"),
+                "Filter issues by state: open, closed, or all",
+                false,
+            ),
+            help_option_json(
+                "--search",
+                Some("SEARCH"),
+                "Filter issues by keyword text",
+                false,
+            ),
+            help_option_json(
+                "--page",
+                Some("PAGE"),
+                "1-based page number to request",
+                false,
+            ),
+            help_option_json(
+                "--per-page",
+                Some("PER_PAGE"),
+                "Number of issues to return per page",
+                false,
+            ),
+        ],
+        Vec::new(),
+        Vec::new(),
+        vec![
+            "gitee issue list --repo octo/demo --state open --json",
+            "gitee issue list --state open --page 1 --per-page 20 --json",
+        ],
+        vec![
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn issue_view_help_json() -> serde_json::Value {
+    help_command_json(
+        "view",
+        "issue view",
+        "View a single issue and optionally include comments",
+        "gh issue view",
+        true,
+        "optional",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json(
+                "--comments",
+                None,
+                "Include issue comments in the response",
+                false,
+            ),
+            help_option_json(
+                "--page",
+                Some("PAGE"),
+                "1-based page number for comment pagination",
+                false,
+            ),
+            help_option_json(
+                "--per-page",
+                Some("PER_PAGE"),
+                "Number of comments to return per page",
+                false,
+            ),
+        ],
+        vec![help_argument_json(
+            "issue",
+            "ISSUE",
+            "Issue number or identifier, such as I123",
+            true,
+        )],
+        Vec::new(),
+        vec![
+            "gitee issue view I123 --repo octo/demo --json",
+            "gitee issue view I123 --comments --page 1 --per-page 20 --json",
+        ],
+        vec!["Comments are fetched only when --comments is provided."],
+    )
+}
+
+fn issue_comment_help_json() -> serde_json::Value {
+    help_command_json(
+        "comment",
+        "issue comment",
+        "Post a comment to an issue",
+        "gh issue comment",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json("--body", Some("BODY"), "Inline comment body text", false),
+            help_option_json(
+                "--body-file",
+                Some("PATH"),
+                "Read comment body text from a file",
+                false,
+            ),
+        ],
+        vec![help_argument_json(
+            "issue",
+            "ISSUE",
+            "Issue number or identifier, such as I123",
+            true,
+        )],
+        vec!["--body", "--body-file"],
+        vec![
+            "gitee issue comment I123 --repo octo/demo --body \"Thanks for the report\" --json",
+            "gitee issue comment I123 --body-file ./comment.md --json",
+        ],
+        vec![
+            "Provide exactly one of --body or --body-file.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn issue_create_help_json() -> serde_json::Value {
+    help_command_json(
+        "create",
+        "issue create",
+        "Create a new issue",
+        "gh issue create",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json("--title", Some("TITLE"), "Issue title", true),
+            help_option_json("--body", Some("BODY"), "Inline issue body text", false),
+            help_option_json(
+                "--body-file",
+                Some("PATH"),
+                "Read issue body text from a file",
+                false,
+            ),
+        ],
+        Vec::new(),
+        vec!["--body", "--body-file"],
+        vec![
+            "gitee issue create --repo octo/demo --title \"New bug\" --body \"Steps to reproduce\" --json",
+            "gitee issue create --title \"New bug\" --body-file ./issue.md --json",
+        ],
+        vec![
+            "--title is required.",
+            "Provide at most one of --body or --body-file.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_help_json() -> serde_json::Value {
+    help_group_json(
+        "pr",
+        "pr",
+        "View, create, comment on, and check out pull requests",
+        "gh pr",
+        vec![
+            pr_checkout_help_json(),
+            pr_comment_help_json(),
+            pr_create_help_json(),
+            pr_list_help_json(),
+            pr_status_help_json(),
+            pr_view_help_json(),
+        ],
+    )
+}
+
+fn pr_view_help_json() -> serde_json::Value {
+    help_command_json(
+        "view",
+        "pr view",
+        "View a single pull request",
+        "gh pr view",
+        true,
+        "optional",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+        ],
+        vec![help_argument_json("pr", "PR", "Pull request number", true)],
+        Vec::new(),
+        vec![
+            "gitee pr view 42 --repo octo/demo --json",
+            "gitee pr view 42 --json",
+        ],
+        vec![
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_comment_help_json() -> serde_json::Value {
+    help_command_json(
+        "comment",
+        "pr comment",
+        "Post a comment to a pull request",
+        "gh pr comment",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json("--body", Some("BODY"), "Inline comment body text", false),
+            help_option_json(
+                "--body-file",
+                Some("PATH"),
+                "Read comment body text from a file",
+                false,
+            ),
+        ],
+        vec![help_argument_json("pr", "PR", "Pull request number", true)],
+        vec!["--body", "--body-file"],
+        vec![
+            "gitee pr comment 42 --repo octo/demo --body \"Ship it\" --json",
+            "gitee pr comment 42 --body-file ./comment.md --json",
+        ],
+        vec![
+            "Provide exactly one of --body or --body-file.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_create_help_json() -> serde_json::Value {
+    help_command_json(
+        "create",
+        "pr create",
+        "Create a pull request from the current branch or an explicit head",
+        "gh pr create",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json(
+                "--head",
+                Some("HEAD"),
+                "Head branch to use instead of the current branch",
+                false,
+            ),
+            help_option_json("--base", Some("BASE"), "Base branch to target", false),
+            help_option_json("--title", Some("TITLE"), "Pull request title", true),
+            help_option_json(
+                "--body",
+                Some("BODY"),
+                "Inline pull request body text",
+                false,
+            ),
+            help_option_json(
+                "--body-file",
+                Some("PATH"),
+                "Read pull request body text from a file",
+                false,
+            ),
+        ],
+        Vec::new(),
+        vec!["--body", "--body-file"],
+        vec![
+            "gitee pr create --title \"Use local head\" --base develop --body \"Built from the local branch\"",
+            "gitee pr create --repo octo/demo --head feature/body-file --title \"Read body file\" --body-file ./body.md --json",
+        ],
+        vec![
+            "--title is required.",
+            "Provide at most one of --body or --body-file.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_list_help_json() -> serde_json::Value {
+    help_command_json(
+        "list",
+        "pr list",
+        "List pull requests with filters",
+        "gh pr list",
+        true,
+        "optional",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json(
+                "--state",
+                Some("STATE"),
+                "Filter pull requests by state: open, closed, merged, or all",
+                false,
+            ),
+            help_option_json(
+                "--author",
+                Some("AUTHOR"),
+                "Filter pull requests by author login",
+                false,
+            ),
+            help_option_json(
+                "--assignee",
+                Some("ASSIGNEE"),
+                "Filter pull requests by assignee login",
+                false,
+            ),
+            help_option_json(
+                "--base",
+                Some("BASE"),
+                "Filter pull requests by base branch",
+                false,
+            ),
+            help_option_json(
+                "--head",
+                Some("HEAD"),
+                "Filter pull requests by head branch",
+                false,
+            ),
+            help_option_json(
+                "--limit",
+                Some("LIMIT"),
+                "Maximum number of pull requests to return",
+                false,
+            ),
+        ],
+        Vec::new(),
+        Vec::new(),
+        vec![
+            "gitee pr list --repo octo/demo --state open --author octocat --limit 10 --json",
+            "gitee pr list --state open --limit 10 --json",
+        ],
+        vec![
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_checkout_help_json() -> serde_json::Value {
+    help_command_json(
+        "checkout",
+        "pr checkout",
+        "Fetch and check out a pull request head branch",
+        "gh pr checkout",
+        true,
+        "optional",
+        true,
+        true,
+        true,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+        ],
+        vec![help_argument_json("pr", "PR", "Pull request number", true)],
+        Vec::new(),
+        vec![
+            "gitee pr checkout 42 --repo octo/demo --json",
+            "gitee pr checkout 42 --json",
+        ],
+        vec![
+            "Requires a local git checkout with an origin remote.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_status_help_json() -> serde_json::Value {
+    help_command_json(
+        "status",
+        "pr status",
+        "Show pull requests related to the current local checkout",
+        "gh pr status",
+        true,
+        "required",
+        false,
+        false,
+        true,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            help_option_json(
+                "--state",
+                Some("STATE"),
+                "Filter pull requests by state: open, closed, merged, or all",
+                false,
+            ),
+            help_option_json(
+                "--limit",
+                Some("LIMIT"),
+                "Maximum number of pull requests to return",
+                false,
+            ),
+        ],
+        Vec::new(),
+        Vec::new(),
+        vec![
+            "gitee pr status --state open --limit 10 --json",
+            "gitee pr status --json",
+        ],
+        vec!["Requires a local git checkout and authentication."],
+    )
+}
+
+fn repo_help_json() -> serde_json::Value {
+    help_group_json(
+        "repo",
+        "repo",
+        "Inspect and clone repositories",
+        "gh repo",
+        vec![repo_clone_help_json(), repo_view_help_json()],
+    )
+}
+
+fn repo_view_help_json() -> serde_json::Value {
+    help_command_json(
+        "view",
+        "repo view",
+        "View repository metadata",
+        "gh repo view",
+        true,
+        "optional",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+        ],
+        Vec::new(),
+        Vec::new(),
+        vec![
+            "gitee repo view --repo octo/demo --json",
+            "gitee repo view --json",
+        ],
+        vec![
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn repo_clone_help_json() -> serde_json::Value {
+    help_command_json(
+        "clone",
+        "repo clone",
+        "Clone a repository by owner/repo slug",
+        "gh repo clone",
+        true,
+        "optional",
+        false,
+        false,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            help_option_json("--https", None, "Clone over HTTPS (default)", false),
+            help_option_json("--ssh", None, "Clone over SSH", false),
+        ],
+        vec![
+            help_argument_json("repo", "OWNER/REPO", "Repository slug to clone", true),
+            help_argument_json(
+                "destination",
+                "DESTINATION",
+                "Optional local destination directory",
+                false,
+            ),
+        ],
+        Vec::new(),
+        vec![
+            "gitee repo clone octo/demo",
+            "gitee repo clone octo/demo demo-ssh --ssh --json",
+        ],
+        vec!["Use at most one of --https or --ssh."],
+    )
+}
+
+fn help_group_json(
+    name: &str,
+    path: &str,
+    summary: &str,
+    gh_equivalent: &str,
+    subcommands: Vec<serde_json::Value>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "group",
+        "name": name,
+        "path": path,
+        "summary": summary,
+        "gh_equivalent": gh_equivalent,
+        "subcommands": subcommands
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn help_command_json(
+    name: &str,
+    path: &str,
+    summary: &str,
+    gh_equivalent: &str,
+    supports_json: bool,
+    auth: &str,
+    repo_flag: bool,
+    repo_inference: bool,
+    local_git_required: bool,
+    flags: Vec<serde_json::Value>,
+    arguments: Vec<serde_json::Value>,
+    input_sources: Vec<&str>,
+    examples: Vec<&str>,
+    notes: Vec<&str>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "command",
+        "name": name,
+        "path": path,
+        "summary": summary,
+        "gh_equivalent": gh_equivalent,
+        "supports_json": supports_json,
+        "auth": auth,
+        "repo_flag": repo_flag,
+        "repo_inference": repo_inference,
+        "local_git_required": local_git_required,
+        "flags": flags,
+        "arguments": arguments,
+        "input_sources": input_sources,
+        "examples": examples,
+        "notes": notes
+    })
+}
+
+fn repo_option_json() -> serde_json::Value {
+    help_option_json(
+        "--repo",
+        Some("REPO"),
+        "Target repository as OWNER/REPO; defaults to local git context when supported",
+        false,
+    )
+}
+
+fn help_option_json(
+    name: &str,
+    value_name: Option<&str>,
+    description: &str,
+    required: bool,
+) -> serde_json::Value {
+    match value_name {
+        Some(value_name) => serde_json::json!({
+            "kind": "option",
+            "name": name,
+            "value_name": value_name,
+            "description": description,
+            "required": required
+        }),
+        None => serde_json::json!({
+            "kind": "option",
+            "name": name,
+            "description": description,
+            "required": required
+        }),
+    }
+}
+
+fn help_argument_json(
+    name: &str,
+    value_name: &str,
+    description: &str,
+    required: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "argument",
+        "name": name,
+        "value_name": value_name,
+        "description": description,
+        "required": required
+    })
 }
 
 fn parse_pr_state(value: &str) -> Result<String, CommandError> {

@@ -9,6 +9,16 @@ raw Gitee API calls.
 
 The installed executable is named `gitee`.
 
+For agent and LLM discovery, start with:
+
+```bash
+gitee help --json
+```
+
+This returns a machine-readable manifest of supported command groups,
+subcommands, flags, examples, and `gh`-style equivalents. To inspect one
+command only, use a topic path such as `gitee help pr create --json`.
+
 > `gitee-cli` is an unofficial community project. It is not affiliated with,
 > endorsed by, or sponsored by Gitee or `gitee.com`.
 >
