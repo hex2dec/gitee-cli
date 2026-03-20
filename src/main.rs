@@ -35,88 +35,188 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
-    match args.as_slice() {
-        [cmd, subcmd, format] if cmd == "auth" && subcmd == "status" && format == "--json" => {
-            auth_status_json()
+    let Some((command, rest)) = args.split_first() else {
+        return Err(CommandError::usage("missing command"));
+    };
+
+    match command.as_str() {
+        "auth" => run_auth(rest),
+        _ => Err(CommandError::usage("unsupported command")),
+    }
+}
+
+fn run_auth(args: &[String]) -> Result<CommandOutcome, CommandError> {
+    let Some((subcommand, rest)) = args.split_first() else {
+        return Err(CommandError::usage("missing auth subcommand"));
+    };
+
+    match subcommand.as_str() {
+        "status" => {
+            let output = parse_output_format(rest)?;
+            auth_status(output)
         }
-        [cmd, subcmd, token_flag, token, format]
-            if cmd == "auth"
-                && subcmd == "login"
-                && token_flag == "--token"
-                && format == "--json" =>
-        {
-            auth_login_json(token)
+        "login" => {
+            let login_args = parse_auth_login_args(rest)?;
+            auth_login(login_args)
         }
-        [cmd, subcmd, token_flag, format]
-            if cmd == "auth"
-                && subcmd == "login"
-                && token_flag == "--with-token"
-                && format == "--json" =>
-        {
-            let token = read_token_from_stdin().map_err(CommandError::usage)?;
-            auth_login_json(&token)
-        }
-        [cmd, subcmd, format] if cmd == "auth" && subcmd == "logout" && format == "--json" => {
-            auth_logout_json()
+        "logout" => {
+            let output = parse_output_format(rest)?;
+            auth_logout(output)
         }
         _ => Err(CommandError::usage("unsupported command")),
     }
 }
 
-fn auth_status_json() -> Result<CommandOutcome, CommandError> {
+fn auth_status(output: OutputFormat) -> Result<CommandOutcome, CommandError> {
     let Some(credentials) = load_runtime_token().map_err(CommandError::config)? else {
-        return Ok(CommandOutcome::json(
+        return Ok(render_auth_state(
+            output,
             EXIT_AUTH,
-            json!({
-                "authenticated": false,
-                "source": "none",
-                "username": serde_json::Value::Null,
-                "config_path": config_path(),
-            }),
+            AuthState {
+                authenticated: false,
+                source: "none",
+                username: None,
+                logged_out: false,
+            },
         ));
     };
 
     let username = fetch_current_user(&credentials.token).map_err(map_auth_error)?;
-
-    Ok(CommandOutcome::json(
+    Ok(render_auth_state(
+        output,
         EXIT_OK,
-        json!({
-            "authenticated": true,
-            "source": credentials.source.as_str(),
-            "username": username,
-            "config_path": config_path(),
-        }),
+        AuthState {
+            authenticated: true,
+            source: credentials.source.as_str(),
+            username: Some(username),
+            logged_out: false,
+        },
     ))
 }
 
-fn auth_login_json(token: &str) -> Result<CommandOutcome, CommandError> {
-    let username = fetch_current_user(token).map_err(map_auth_error)?;
-    save_config_token(token).map_err(CommandError::config)?;
+fn auth_login(args: AuthLoginArgs) -> Result<CommandOutcome, CommandError> {
+    let token = match args.token_source {
+        LoginTokenSource::Flag(token) => token,
+        LoginTokenSource::Stdin => read_token_from_stdin().map_err(CommandError::usage)?,
+    };
 
-    Ok(CommandOutcome::json(
+    let username = fetch_current_user(&token).map_err(map_auth_error)?;
+    save_config_token(&token).map_err(CommandError::config)?;
+
+    Ok(render_auth_state(
+        args.output,
         EXIT_OK,
-        json!({
-            "authenticated": true,
-            "source": "config",
-            "username": username,
-            "config_path": config_path(),
-        }),
+        AuthState {
+            authenticated: true,
+            source: "config",
+            username: Some(username),
+            logged_out: false,
+        },
     ))
 }
 
-fn auth_logout_json() -> Result<CommandOutcome, CommandError> {
+fn auth_logout(output: OutputFormat) -> Result<CommandOutcome, CommandError> {
     clear_config_token().map_err(CommandError::config)?;
-
-    Ok(CommandOutcome::json(
+    Ok(render_auth_state(
+        output,
         EXIT_OK,
-        json!({
-            "authenticated": false,
-            "source": "none",
-            "username": serde_json::Value::Null,
-            "logged_out": true,
-            "config_path": config_path(),
-        }),
+        AuthState {
+            authenticated: false,
+            source: "none",
+            username: None,
+            logged_out: true,
+        },
     ))
+}
+
+fn render_auth_state(output: OutputFormat, code: u8, state: AuthState) -> CommandOutcome {
+    match output {
+        OutputFormat::Json => CommandOutcome::json(
+            code,
+            json!({
+                "authenticated": state.authenticated,
+                "source": state.source,
+                "username": state.username,
+                "logged_out": state.logged_out,
+                "config_path": config_path(),
+            }),
+        ),
+        OutputFormat::Text => CommandOutcome::text(code, render_auth_text(&state)),
+    }
+}
+
+fn render_auth_text(state: &AuthState) -> String {
+    if state.logged_out {
+        return "Logged out".to_string();
+    }
+
+    if !state.authenticated {
+        return "Not authenticated".to_string();
+    }
+
+    match &state.username {
+        Some(username) => format!("Authenticated as {username} via {}", state.source),
+        None => format!("Authenticated via {}", state.source),
+    }
+}
+
+fn parse_output_format(args: &[String]) -> Result<OutputFormat, CommandError> {
+    let mut output = OutputFormat::Text;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => output = OutputFormat::Json,
+            _ => return Err(CommandError::usage("unsupported command")),
+        }
+    }
+    Ok(output)
+}
+
+fn parse_auth_login_args(args: &[String]) -> Result<AuthLoginArgs, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut token: Option<LoginTokenSource> = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => {
+                output = OutputFormat::Json;
+                index += 1;
+            }
+            "--token" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --token"));
+                };
+                if token.is_some() {
+                    return Err(CommandError::usage(
+                        "provide only one of --token or --with-token",
+                    ));
+                }
+                token = Some(LoginTokenSource::Flag(value.clone()));
+                index += 2;
+            }
+            "--with-token" => {
+                if token.is_some() {
+                    return Err(CommandError::usage(
+                        "provide only one of --token or --with-token",
+                    ));
+                }
+                token = Some(LoginTokenSource::Stdin);
+                index += 1;
+            }
+            _ => return Err(CommandError::usage("unsupported command")),
+        }
+    }
+
+    let Some(token_source) = token else {
+        return Err(CommandError::usage(
+            "login requires --token or --with-token",
+        ));
+    };
+
+    Ok(AuthLoginArgs {
+        output,
+        token_source,
+    })
 }
 
 fn load_runtime_token() -> Result<Option<ResolvedToken>, ConfigError> {
@@ -260,6 +360,13 @@ impl CommandOutcome {
             stdout: Some(payload.to_string()),
         }
     }
+
+    fn text(code: u8, body: String) -> Self {
+        Self {
+            code,
+            stdout: Some(body),
+        }
+    }
 }
 
 struct CommandError {
@@ -303,6 +410,28 @@ impl TokenSource {
             Self::Config => "config",
         }
     }
+}
+
+struct AuthLoginArgs {
+    output: OutputFormat,
+    token_source: LoginTokenSource,
+}
+
+enum LoginTokenSource {
+    Flag(String),
+    Stdin,
+}
+
+enum OutputFormat {
+    Text,
+    Json,
+}
+
+struct AuthState {
+    authenticated: bool,
+    source: &'static str,
+    username: Option<String>,
+    logged_out: bool,
 }
 
 #[derive(Deserialize, Serialize)]

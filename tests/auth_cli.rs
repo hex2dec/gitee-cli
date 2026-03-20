@@ -32,6 +32,23 @@ fn auth_status_reports_unauthenticated_when_no_token_is_available() {
 }
 
 #[test]
+fn auth_status_supports_default_text_output_without_json_flag() {
+    let config_dir = TempDir::new().unwrap();
+
+    let output = Command::cargo_bin("gitee-cli")
+        .unwrap()
+        .env("GITEE_CONFIG_DIR", config_dir.path())
+        .env_remove("GITEE_TOKEN")
+        .args(["auth", "status"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(3));
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Not authenticated");
+    assert!(String::from_utf8_lossy(&output.stderr).trim().is_empty());
+}
+
+#[test]
 fn auth_login_persists_the_validated_token_for_later_status_checks() {
     let config_dir = TempDir::new().unwrap();
     let server = MockServer::start();
@@ -122,6 +139,37 @@ fn auth_login_can_read_the_token_from_stdin() {
     assert_eq!(status_body["source"], "config");
     assert_eq!(status_body["username"], "stdin-user");
     user_mock.assert_hits(2);
+}
+
+#[test]
+fn auth_login_accepts_json_flag_before_token_flag() {
+    let config_dir = TempDir::new().unwrap();
+    let server = MockServer::start();
+
+    let user_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/user")
+            .query_param("access_token", "ordered-token");
+        then.status(200).json_body(serde_json::json!({
+            "login": "ordered-user"
+        }));
+    });
+
+    let login_output = Command::cargo_bin("gitee-cli")
+        .unwrap()
+        .env("GITEE_CONFIG_DIR", config_dir.path())
+        .env("GITEE_BASE_URL", server.base_url())
+        .env_remove("GITEE_TOKEN")
+        .args(["auth", "login", "--json", "--token", "ordered-token"])
+        .output()
+        .unwrap();
+
+    assert_eq!(login_output.status.code(), Some(0));
+    let login_body: Value = serde_json::from_slice(&login_output.stdout).unwrap();
+    assert_eq!(login_body["authenticated"], true);
+    assert_eq!(login_body["source"], "config");
+    assert_eq!(login_body["username"], "ordered-user");
+    user_mock.assert_hits(1);
 }
 
 #[test]
