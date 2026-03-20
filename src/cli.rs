@@ -558,8 +558,6 @@ fn parse_matches(
     command: Command,
     args: &[String],
 ) -> Result<ParseOutcome<ArgMatches>, CommandError> {
-    validate_legacy_arg_syntax(&command, args)?;
-
     let mut argv = Vec::with_capacity(args.len() + 1);
     argv.push(command.get_name().to_string());
     argv.extend(args.iter().cloned());
@@ -576,37 +574,6 @@ fn parse_matches(
             _ => Err(map_clap_error(error)),
         },
     }
-}
-
-fn validate_legacy_arg_syntax(command: &Command, args: &[String]) -> Result<(), CommandError> {
-    let value_options: Vec<String> = command
-        .get_opts()
-        .filter_map(|arg| arg.get_long().map(|long| format!("--{long}")))
-        .collect();
-    let mut pending_value = false;
-
-    for arg in args {
-        if pending_value {
-            pending_value = false;
-            continue;
-        }
-
-        if arg == "--" || is_inline_long_option_value(arg) {
-            return Err(CommandError::usage("unsupported command"));
-        }
-
-        if value_options.iter().any(|option| option == arg) {
-            pending_value = true;
-        }
-    }
-
-    Ok(())
-}
-
-fn is_inline_long_option_value(arg: &str) -> bool {
-    arg.strip_prefix("--")
-        .map(|value| !value.is_empty() && value.contains('='))
-        .unwrap_or(false)
 }
 
 fn map_clap_error(error: clap::Error) -> CommandError {
