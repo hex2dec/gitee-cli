@@ -8,6 +8,13 @@ pub struct GiteeClient {
     base_url: String,
 }
 
+pub struct CreatePullRequest<'a> {
+    pub title: &'a str,
+    pub head: &'a str,
+    pub base: &'a str,
+    pub body: Option<&'a str>,
+}
+
 impl GiteeClient {
     pub fn from_env() -> Self {
         Self {
@@ -336,6 +343,51 @@ impl GiteeClient {
         }
 
         Err(RepoError::UnexpectedStatus(response.status().as_u16()))
+    }
+
+    pub fn create_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        token: &str,
+        request: &CreatePullRequest<'_>,
+    ) -> Result<PullRequest, PullRequestError> {
+        let mut form = vec![
+            ("title", request.title.to_string()),
+            ("head", request.head.to_string()),
+            ("base", request.base.to_string()),
+        ];
+
+        if let Some(body) = request.body {
+            form.push(("body", body.to_string()));
+        }
+
+        let response = self
+            .client
+            .post(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url))
+            .query(&[("access_token", token)])
+            .form(&form)
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            let pull_request = response
+                .json::<PullRequestResponse>()
+                .map_err(PullRequestError::Transport)?;
+            return Ok(pull_request.into_pull_request(owner, repo));
+        }
+
+        if matches!(response.status().as_u16(), 400 | 401) {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if response.status().as_u16() == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        Err(PullRequestError::UnexpectedStatus(
+            response.status().as_u16(),
+        ))
     }
 }
 
