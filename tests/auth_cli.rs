@@ -9,15 +9,10 @@ use tempfile::TempDir;
 #[test]
 fn auth_status_reports_unauthenticated_when_no_token_is_available() {
     let config_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
 
     let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env_remove("GITEE_TOKEN")
         .args(["auth", "status", "--json"])
         .output()
@@ -39,15 +34,10 @@ fn auth_status_reports_unauthenticated_when_no_token_is_available() {
 #[test]
 fn auth_status_supports_default_text_output_without_json_flag() {
     let config_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
 
     let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env_remove("GITEE_TOKEN")
         .args(["auth", "status"])
         .output()
@@ -64,7 +54,6 @@ fn auth_status_supports_default_text_output_without_json_flag() {
 #[test]
 fn auth_login_persists_the_validated_token_for_later_status_checks() {
     let config_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
     let user_mock = server.mock(|when, then| {
@@ -79,10 +68,6 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
     let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "login", "--token", "valid-token", "--json"])
@@ -102,10 +87,6 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
     let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "status", "--json"])
@@ -125,7 +106,6 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
     let home_dir = TempDir::new().unwrap();
     let login_dir = TempDir::new().unwrap();
     let status_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
     let expected_config_path = home_dir.path().join(".config/gitee/config.toml");
@@ -143,10 +123,6 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
         .unwrap()
         .current_dir(login_dir.path())
         .env("HOME", home_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env_remove("XDG_CONFIG_HOME")
         .env_remove("GITEE_CONFIG_DIR")
         .env_remove("GITEE_TOKEN")
@@ -173,10 +149,6 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
         .unwrap()
         .current_dir(status_dir.path())
         .env("HOME", home_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env_remove("XDG_CONFIG_HOME")
         .env_remove("GITEE_CONFIG_DIR")
         .env_remove("GITEE_TOKEN")
@@ -201,7 +173,6 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
 #[test]
 fn auth_login_can_read_the_token_from_stdin() {
     let config_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
     let user_mock = server.mock(|when, then| {
@@ -216,10 +187,6 @@ fn auth_login_can_read_the_token_from_stdin() {
     let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .write_stdin("stdin-token\n")
@@ -240,10 +207,6 @@ fn auth_login_can_read_the_token_from_stdin() {
     let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "status", "--json"])
@@ -261,7 +224,6 @@ fn auth_login_can_read_the_token_from_stdin() {
 #[test]
 fn auth_login_accepts_json_flag_before_token_flag() {
     let config_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
     let user_mock = server.mock(|when, then| {
@@ -276,10 +238,6 @@ fn auth_login_accepts_json_flag_before_token_flag() {
     let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "login", "--json", "--token", "ordered-token"])
@@ -301,7 +259,6 @@ fn auth_login_accepts_json_flag_before_token_flag() {
 #[test]
 fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
     let config_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
     let config_token_mock = server.mock(|when, then| {
@@ -325,10 +282,6 @@ fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
     let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "login", "--token", "config-token", "--json"])
@@ -340,10 +293,6 @@ fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
     let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env("GITEE_TOKEN", "env-token")
         .args(["auth", "status", "--json"])
@@ -362,7 +311,6 @@ fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
 #[test]
 fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
     let config_dir = TempDir::new().unwrap();
-    let credential_store_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
     let user_mock = server.mock(|when, then| {
@@ -377,10 +325,6 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
     let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "login", "--token", "config-token", "--json"])
@@ -392,10 +336,6 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
     let logout_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env_remove("GITEE_TOKEN")
         .args(["auth", "logout", "--json"])
         .output()
@@ -411,10 +351,6 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
     let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
-        .env(
-            "GITEE_TEST_CREDENTIAL_STORE_DIR",
-            credential_store_dir.path(),
-        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "status", "--json"])
