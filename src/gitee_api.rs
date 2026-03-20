@@ -12,8 +12,7 @@ impl GiteeClient {
     pub fn from_env() -> Self {
         Self {
             client: Client::new(),
-            base_url: env::var("GITEE_BASE_URL")
-                .unwrap_or_else(|_| "https://gitee.com".to_string()),
+            base_url: resolve_base_url(env::var("GITEE_BASE_URL").ok()),
         }
     }
 
@@ -40,6 +39,13 @@ impl GiteeClient {
     }
 }
 
+fn resolve_base_url(value: Option<String>) -> String {
+    value
+        .unwrap_or_else(|| "https://gitee.com/api".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
 pub enum AuthError {
     InvalidToken,
     Transport(reqwest::Error),
@@ -49,4 +55,22 @@ pub enum AuthError {
 #[derive(Deserialize)]
 struct UserResponse {
     login: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_base_url;
+
+    #[test]
+    fn defaults_to_gitee_api_base_path() {
+        assert_eq!(resolve_base_url(None), "https://gitee.com/api");
+    }
+
+    #[test]
+    fn trims_trailing_slash_from_custom_base_url() {
+        assert_eq!(
+            resolve_base_url(Some("http://127.0.0.1:1234/".to_string())),
+            "http://127.0.0.1:1234"
+        );
+    }
 }
