@@ -1,7 +1,12 @@
+use std::path::PathBuf;
+
 use crate::auth::{AuthService, LoginRequest, LoginTokenSource};
 use crate::command::{CommandError, CommandOutcome, OutputFormat};
 use crate::gitee_api::PullRequestListFilters;
-use crate::issue::{IssueListRequest, IssueService, IssueStateFilter, IssueViewRequest};
+use crate::issue::{
+    IssueCommentBodySource, IssueCommentRequest, IssueListRequest, IssueService, IssueStateFilter,
+    IssueViewRequest,
+};
 use crate::pr::{PrCheckoutRequest, PrListRequest, PrService, PrStatusRequest, PrViewRequest};
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
 
@@ -42,6 +47,7 @@ fn run_issue(args: &[String]) -> Result<CommandOutcome, CommandError> {
     let issue = IssueService::from_env();
 
     match subcommand.as_str() {
+        "comment" => issue.comment(parse_issue_comment_args(rest)?),
         "list" => issue.list(parse_issue_list_args(rest)?),
         "view" => issue.view(parse_issue_view_args(rest)?),
         _ => Err(CommandError::usage("unsupported command")),
@@ -268,6 +274,95 @@ fn parse_issue_view_args(args: &[String]) -> Result<IssueViewRequest, CommandErr
         comments,
         page,
         per_page,
+    })
+}
+
+fn parse_issue_comment_args(args: &[String]) -> Result<IssueCommentRequest, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut repo = None;
+    let mut body = None;
+    let mut positionals = Vec::new();
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => {
+                output = OutputFormat::Json;
+                index += 1;
+            }
+            "--repo" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --repo"));
+                };
+                repo = Some(value.clone());
+                index += 2;
+            }
+            "--body" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --body"));
+                };
+                if body.is_some() {
+                    return Err(CommandError::usage(
+                        "provide only one of --body, --body-file, or --body-stdin",
+                    ));
+                }
+                body = Some(IssueCommentBodySource::Flag(value.clone()));
+                index += 2;
+            }
+            "--body-file" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --body-file"));
+                };
+                if body.is_some() {
+                    return Err(CommandError::usage(
+                        "provide only one of --body, --body-file, or --body-stdin",
+                    ));
+                }
+                body = Some(IssueCommentBodySource::File(PathBuf::from(value)));
+                index += 2;
+            }
+            "--body-stdin" => {
+                if body.is_some() {
+                    return Err(CommandError::usage(
+                        "provide only one of --body, --body-file, or --body-stdin",
+                    ));
+                }
+                body = Some(IssueCommentBodySource::Stdin);
+                index += 1;
+            }
+            value if value.starts_with("--") => {
+                return Err(CommandError::usage("unsupported command"));
+            }
+            value => {
+                positionals.push(value.to_string());
+                index += 1;
+            }
+        }
+    }
+
+    let Some(number) = positionals.first() else {
+        return Err(CommandError::usage(
+            "issue comment requires an issue number",
+        ));
+    };
+
+    if positionals.len() > 1 {
+        return Err(CommandError::usage(
+            "issue comment accepts exactly one issue number",
+        ));
+    }
+
+    let Some(body) = body else {
+        return Err(CommandError::usage(
+            "issue comment requires one of --body, --body-file, or --body-stdin",
+        ));
+    };
+
+    Ok(IssueCommentRequest {
+        output,
+        repo,
+        number: number.clone(),
+        body,
     })
 }
 
