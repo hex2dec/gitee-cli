@@ -115,10 +115,47 @@ impl std::fmt::Display for ConfigError {
 
 fn config_dir() -> PathBuf {
     if let Ok(path) = env::var("GITEE_CONFIG_DIR") {
-        return PathBuf::from(path);
+        let path = path.trim();
+        if !path.is_empty() {
+            return PathBuf::from(path);
+        }
+    }
+
+    if let Ok(path) = env::var("XDG_CONFIG_HOME") {
+        let path = path.trim();
+        if !path.is_empty() {
+            return PathBuf::from(path).join("gitee-cli");
+        }
+    }
+
+    if let Some(home_dir) = home_dir() {
+        return home_dir.join(".config").join("gitee-cli");
     }
 
     env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(".gitee-cli")
+}
+
+fn home_dir() -> Option<PathBuf> {
+    if let Ok(path) = env::var("HOME") {
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    if let Ok(path) = env::var("USERPROFILE") {
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    match (env::var("HOMEDRIVE"), env::var("HOMEPATH")) {
+        (Ok(drive), Ok(path)) if !drive.trim().is_empty() && !path.trim().is_empty() => {
+            Some(PathBuf::from(format!("{}{}", drive.trim(), path.trim())))
+        }
+        _ => None,
+    }
 }
