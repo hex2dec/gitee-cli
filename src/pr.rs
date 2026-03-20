@@ -1,9 +1,13 @@
+use std::fs;
+use std::io::{self, Read};
+
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
 use crate::gitee_api::{
-    GiteeClient, PullRequest, PullRequestError, PullRequestListFilters, RepoError,
+    CreatePullRequestComment, GiteeClient, PullRequest, PullRequestComment, PullRequestError,
+    PullRequestListFilters, RepoError,
 };
 use crate::repo_context::infer_repo_context;
 
@@ -32,6 +36,40 @@ impl PrService {
             self.fetch_pull_request_with_fallback(&repo, request.number, token.as_deref())?;
 
         Ok(render_pr_view(request.output, pull_request))
+    }
+
+    pub fn comment(&self, request: PrCommentRequest) -> Result<CommandOutcome, CommandError> {
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: crate::command::EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for pr comment".to_string()),
+            })?
+            .token;
+
+        let repo = resolve_repo(request.repo.as_deref())?;
+        let body = read_required_body(request.body)?;
+        let target_repo = self.resolve_comment_target_repo(&repo, request.number, Some(&token))?;
+        let comment = self
+            .client
+            .create_pull_request_comment(
+                &target_repo.owner,
+                &target_repo.name,
+                request.number,
+                &token,
+                &CreatePullRequestComment { body: &body },
+            )
+            .map_err(map_pull_request_error)?;
+
+        Ok(render_pr_comment(
+            request.output,
+            &target_repo,
+            request.number,
+            comment,
+        ))
     }
 
     pub fn list(&self, request: PrListRequest) -> Result<CommandOutcome, CommandError> {
@@ -211,12 +249,52 @@ impl PrService {
             Err(error) => map_repo_error(error),
         }
     }
+
+    fn resolve_comment_target_repo(
+        &self,
+        repo: &ResolvedRepo,
+        number: u64,
+        token: Option<&str>,
+    ) -> Result<ResolvedRepo, CommandError> {
+        match self
+            .client
+            .fetch_pull_request(&repo.owner, &repo.name, number, token)
+        {
+            Ok(_) => Ok(repo.clone()),
+            Err(PullRequestError::NotFound) => {
+                if let Some(canonical_repo) = self.find_canonical_repo(repo, token)? {
+                    match self.client.fetch_pull_request(
+                        &canonical_repo.owner,
+                        &canonical_repo.name,
+                        number,
+                        token,
+                    ) {
+                        Ok(_) => Ok(canonical_repo),
+                        Err(PullRequestError::NotFound) => {
+                            Err(self.classify_missing_pull_request(&canonical_repo, token))
+                        }
+                        Err(error) => Err(map_pull_request_error(error)),
+                    }
+                } else {
+                    Err(self.classify_missing_pull_request(repo, token))
+                }
+            }
+            Err(error) => Err(map_pull_request_error(error)),
+        }
+    }
 }
 
 pub struct PrViewRequest {
     pub output: OutputFormat,
     pub repo: Option<String>,
     pub number: u64,
+}
+
+pub struct PrCommentRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub number: u64,
+    pub body: PrTextSource,
 }
 
 pub struct PrListRequest {
@@ -228,6 +306,11 @@ pub struct PrListRequest {
 pub struct PrStatusRequest {
     pub output: OutputFormat,
     pub filters: PullRequestListFilters,
+}
+
+pub enum PrTextSource {
+    Inline(String),
+    File(String),
 }
 
 #[derive(Clone)]
@@ -338,6 +421,37 @@ fn render_pr_view(output: OutputFormat, pull_request: PullRequest) -> CommandOut
     }
 }
 
+fn render_pr_comment(
+    output: OutputFormat,
+    repo: &ResolvedRepo,
+    number: u64,
+    comment: PullRequestComment,
+) -> CommandOutcome {
+    match output {
+        OutputFormat::Json => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "id": comment.id,
+                "body": comment.body,
+                "author": comment.author,
+                "repository": format!("{}/{}", repo.owner, repo.name),
+                "pull_request": number,
+                "html_url": comment.html_url,
+                "created_at": comment.created_at,
+                "updated_at": comment.updated_at,
+                "comment_type": comment.comment_type,
+            }),
+        ),
+        OutputFormat::Text => CommandOutcome::text(
+            EXIT_OK,
+            format!(
+                "Commented on pull request #{number}\ncomment id: {}\nrepository: {}/{}\nauthor: {}\nurl: {}",
+                comment.id, repo.owner, repo.name, comment.author, comment.html_url,
+            ),
+        ),
+    }
+}
+
 fn render_pr_list(
     output: OutputFormat,
     repo: &ResolvedRepo,
@@ -436,6 +550,32 @@ fn render_optional_bool(value: Option<bool>) -> &'static str {
         Some(false) => "false",
         None => "unknown",
     }
+}
+
+fn read_required_body(body: PrTextSource) -> Result<String, CommandError> {
+    let body = match body {
+        PrTextSource::Inline(value) => value,
+        PrTextSource::File(path) => read_body_from_file(&path)?,
+    };
+
+    if body.trim().is_empty() {
+        return Err(CommandError::usage("comment body cannot be empty"));
+    }
+
+    Ok(body)
+}
+
+fn read_body_from_file(path: &str) -> Result<String, CommandError> {
+    if path == "-" {
+        let mut body = String::new();
+        io::stdin()
+            .read_to_string(&mut body)
+            .map_err(|err| CommandError::usage(format!("failed to read stdin: {err}")))?;
+        return Ok(body);
+    }
+
+    fs::read_to_string(path)
+        .map_err(|err| CommandError::usage(format!("failed to read body file `{path}`: {err}")))
 }
 
 fn map_pull_request_error(error: PullRequestError) -> CommandError {
