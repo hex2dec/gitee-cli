@@ -26,7 +26,7 @@ fn repo_clone_clones_to_explicit_destination_over_https_and_reports_json() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(working_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -81,7 +81,7 @@ fn repo_clone_uses_ssh_transport_and_defaults_destination_to_repo_name() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(working_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -109,7 +109,7 @@ fn repo_clone_uses_ssh_transport_and_defaults_destination_to_repo_name() {
 
 #[test]
 fn repo_clone_rejects_an_invalid_repository_slug() {
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .args(["repo", "clone", "octo"])
         .output()
@@ -146,7 +146,7 @@ fn repo_clone_fails_with_a_stable_git_error_when_destination_conflicts() {
         }));
     });
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(working_dir.path())
         .env("GITEE_BASE_URL", server.base_url())

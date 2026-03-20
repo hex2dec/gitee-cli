@@ -10,7 +10,7 @@ use tempfile::TempDir;
 fn auth_status_reports_unauthenticated_when_no_token_is_available() {
     let config_dir = TempDir::new().unwrap();
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env_remove("GITEE_TOKEN")
@@ -35,7 +35,7 @@ fn auth_status_reports_unauthenticated_when_no_token_is_available() {
 fn auth_status_supports_default_text_output_without_json_flag() {
     let config_dir = TempDir::new().unwrap();
 
-    let output = Command::cargo_bin("gitee-cli")
+    let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env_remove("GITEE_TOKEN")
@@ -65,7 +65,7 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
         }));
     });
 
-    let login_output = Command::cargo_bin("gitee-cli")
+    let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -80,7 +80,7 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
     assert_eq!(login_body["source"], "config");
     assert_eq!(login_body["username"], "octocat");
 
-    let status_output = Command::cargo_bin("gitee-cli")
+    let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -104,7 +104,7 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
     let status_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
-    let expected_config_path = home_dir.path().join(".config/gitee-cli/config.toml");
+    let expected_config_path = home_dir.path().join(".config/gitee/config.toml");
 
     let user_mock = server.mock(|when, then| {
         when.method(GET)
@@ -115,7 +115,7 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
         }));
     });
 
-    let login_output = Command::cargo_bin("gitee-cli")
+    let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(login_dir.path())
         .env("HOME", home_dir.path())
@@ -137,7 +137,7 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
         expected_config_path.display().to_string()
     );
 
-    let status_output = Command::cargo_bin("gitee-cli")
+    let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(status_dir.path())
         .env("HOME", home_dir.path())
@@ -163,6 +163,49 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
 }
 
 #[test]
+fn auth_status_reads_the_legacy_user_level_config_dir_when_present() {
+    let home_dir = TempDir::new().unwrap();
+    let status_dir = TempDir::new().unwrap();
+    let server = MockServer::start();
+    let legacy_config_path = home_dir.path().join(".config/gitee-cli/config.toml");
+
+    std::fs::create_dir_all(legacy_config_path.parent().unwrap()).unwrap();
+    std::fs::write(&legacy_config_path, "token = \"legacy-token\"\n").unwrap();
+
+    let user_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/user")
+            .query_param("access_token", "legacy-token");
+        then.status(200).json_body(serde_json::json!({
+            "login": "legacy-user"
+        }));
+    });
+
+    let status_output = Command::cargo_bin("gitee")
+        .unwrap()
+        .current_dir(status_dir.path())
+        .env("HOME", home_dir.path())
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("GITEE_CONFIG_DIR")
+        .env_remove("GITEE_TOKEN")
+        .env("GITEE_BASE_URL", server.base_url())
+        .args(["auth", "status", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(status_output.status.code(), Some(0));
+    let status_body: Value = serde_json::from_slice(&status_output.stdout).unwrap();
+    assert_eq!(status_body["authenticated"], true);
+    assert_eq!(status_body["source"], "config");
+    assert_eq!(status_body["username"], "legacy-user");
+    assert_eq!(
+        status_body["config_path"],
+        legacy_config_path.display().to_string()
+    );
+    user_mock.assert_hits(1);
+}
+
+#[test]
 fn auth_login_can_read_the_token_from_stdin() {
     let config_dir = TempDir::new().unwrap();
     let server = MockServer::start();
@@ -176,7 +219,7 @@ fn auth_login_can_read_the_token_from_stdin() {
         }));
     });
 
-    let login_output = Command::cargo_bin("gitee-cli")
+    let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -192,7 +235,7 @@ fn auth_login_can_read_the_token_from_stdin() {
     assert_eq!(login_body["source"], "config");
     assert_eq!(login_body["username"], "stdin-user");
 
-    let status_output = Command::cargo_bin("gitee-cli")
+    let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -223,7 +266,7 @@ fn auth_login_accepts_json_flag_before_token_flag() {
         }));
     });
 
-    let login_output = Command::cargo_bin("gitee-cli")
+    let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -263,7 +306,7 @@ fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
         }));
     });
 
-    let login_output = Command::cargo_bin("gitee-cli")
+    let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -274,7 +317,7 @@ fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
 
     assert_eq!(login_output.status.code(), Some(0));
 
-    let status_output = Command::cargo_bin("gitee-cli")
+    let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -306,7 +349,7 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
         }));
     });
 
-    let login_output = Command::cargo_bin("gitee-cli")
+    let login_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
@@ -317,7 +360,7 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
 
     assert_eq!(login_output.status.code(), Some(0));
 
-    let logout_output = Command::cargo_bin("gitee-cli")
+    let logout_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env_remove("GITEE_TOKEN")
@@ -332,7 +375,7 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
     assert_eq!(logout_body["username"], Value::Null);
     assert_eq!(logout_body["logged_out"], true);
 
-    let status_output = Command::cargo_bin("gitee-cli")
+    let status_output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
         .env("GITEE_BASE_URL", server.base_url())
