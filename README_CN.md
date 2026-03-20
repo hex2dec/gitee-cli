@@ -336,24 +336,6 @@ cargo run -- issue list --repo octo/demo --json
 cargo run -- pr list --repo octo/demo --json
 ```
 
-## 发布流程
-
-GitHub Release 由匹配 `v*` 的 tag 自动触发构建。
-
-- macOS 压缩包在 `macos-14` 上构建，目标为 `aarch64-apple-darwin`。
-- Linux 压缩包在 `ubuntu-latest` 上构建，目标为 `x86_64-unknown-linux-musl`。
-- 工作流会创建或更新一个 draft GitHub release。
-- 每个 draft release 会上传两个压缩包和一个校验文件。
-
-发布一个版本：
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-之后在 GitHub 上检查这个 draft release，再手动点击发布。
-
 ## 许可证
 
 MIT。见 [LICENSE](./LICENSE)。
