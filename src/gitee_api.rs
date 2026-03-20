@@ -25,6 +25,16 @@ struct CreatePullRequestPayload<'a> {
     body: Option<&'a str>,
 }
 
+#[derive(Deserialize)]
+struct ApiErrorResponse {
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
+}
+
 impl GiteeClient {
     pub fn from_env() -> Self {
         Self {
@@ -382,17 +392,24 @@ impl GiteeClient {
             return Ok(pull_request.into_pull_request(owner, repo));
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if status == 401 {
             return Err(PullRequestError::InvalidToken);
         }
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(PullRequestError::NotFound);
         }
 
-        Err(PullRequestError::UnexpectedStatus(
-            response.status().as_u16(),
-        ))
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
     }
 }
 
@@ -428,6 +445,7 @@ pub enum PullRequestError {
     NotFound,
     Transport(reqwest::Error),
     UnexpectedStatus(u16),
+    UnexpectedStatusWithMessage(u16, String),
 }
 
 #[derive(Clone)]
@@ -709,6 +727,22 @@ fn normalize_html_url(value: &str, full_name: &str) -> String {
     }
 
     value.trim_end_matches(".git").to_string()
+}
+
+fn parse_api_error_message(response: reqwest::blocking::Response) -> Option<String> {
+    let body = response.text().ok()?;
+    if body.trim().is_empty() {
+        return None;
+    }
+
+    if let Ok(payload) = serde_json::from_str::<ApiErrorResponse>(&body) {
+        return payload
+            .message
+            .or(payload.error_description)
+            .or(payload.error);
+    }
+
+    Some(body)
 }
 
 #[cfg(test)]

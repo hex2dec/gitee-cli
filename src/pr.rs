@@ -658,6 +658,11 @@ fn map_pull_request_error(error: PullRequestError) -> CommandError {
                 "remote request returned unexpected status: {status}"
             )),
         },
+        PullRequestError::UnexpectedStatusWithMessage(status, message) => CommandError {
+            code: EXIT_REMOTE,
+            stdout: None,
+            stderr: Some(format!("remote request failed ({status}): {message}")),
+        },
         PullRequestError::NotFound => CommandError::not_found("pull request not found"),
     }
 }

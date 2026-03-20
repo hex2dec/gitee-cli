@@ -341,6 +341,62 @@ fn pr_create_fails_when_current_branch_tracks_a_non_origin_remote() {
     );
 }
 
+#[test]
+fn pr_create_surfaces_remote_validation_errors_instead_of_auth_failure() {
+    let server = MockServer::start();
+
+    let repo_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo")
+            .query_param("access_token", "secret-token");
+        then.status(200).json_body(serde_json::json!({
+            "full_name": "octo/demo",
+            "path": "demo",
+            "html_url": "https://gitee.com/octo/demo",
+            "ssh_url": "git@gitee.com:octo/demo.git",
+            "clone_url": "https://gitee.com/octo/demo.git",
+            "fork": false,
+            "default_branch": "main"
+        }));
+    });
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST).path("/v5/repos/octo/demo/pulls");
+        then.status(400).json_body(serde_json::json!({
+            "message": "source branch does not exist"
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "pr",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--head",
+            "feature/missing",
+            "--title",
+            "Example",
+            "--body",
+            "Body",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(5));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "remote request failed (400): source branch does not exist"
+    );
+
+    repo_mock.assert_hits(1);
+    create_mock.assert_hits(1);
+}
+
 fn pull_request_payload(
     number: u64,
     title: &str,
