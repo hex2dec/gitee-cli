@@ -1,5 +1,7 @@
 use crate::auth::{AuthService, LoginRequest, LoginTokenSource};
 use crate::command::{CommandError, CommandOutcome, OutputFormat};
+use crate::gitee_api::PullRequestListFilters;
+use crate::pr::{PrListRequest, PrService, PrStatusRequest, PrViewRequest};
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
 
 pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
@@ -9,6 +11,7 @@ pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
 
     match command.as_str() {
         "auth" => run_auth(rest),
+        "pr" => run_pr(rest),
         "repo" => run_repo(rest),
         _ => Err(CommandError::usage("unsupported command")),
     }
@@ -39,6 +42,21 @@ fn run_repo(args: &[String]) -> Result<CommandOutcome, CommandError> {
     match subcommand.as_str() {
         "clone" => repo.clone(parse_repo_clone_args(rest)?),
         "view" => repo.view(parse_repo_view_args(rest)?),
+        _ => Err(CommandError::usage("unsupported command")),
+    }
+}
+
+fn run_pr(args: &[String]) -> Result<CommandOutcome, CommandError> {
+    let Some((subcommand, rest)) = args.split_first() else {
+        return Err(CommandError::usage("missing pr subcommand"));
+    };
+
+    let pr = PrService::from_env();
+
+    match subcommand.as_str() {
+        "list" => pr.list(parse_pr_list_args(rest)?),
+        "status" => pr.status(parse_pr_status_args(rest)?),
+        "view" => pr.view(parse_pr_view_args(rest)?),
         _ => Err(CommandError::usage("unsupported command")),
     }
 }
@@ -174,5 +192,207 @@ fn parse_repo_clone_args(args: &[String]) -> Result<RepoCloneRequest, CommandErr
         repo: repo.clone(),
         destination: positionals.get(1).cloned(),
         transport,
+    })
+}
+
+fn parse_pr_view_args(args: &[String]) -> Result<PrViewRequest, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut repo = None;
+    let mut number = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => {
+                output = OutputFormat::Json;
+                index += 1;
+            }
+            "--repo" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --repo"));
+                };
+                repo = Some(value.clone());
+                index += 2;
+            }
+            value if value.starts_with("--") => {
+                return Err(CommandError::usage("unsupported command"));
+            }
+            value => {
+                if number.is_some() {
+                    return Err(CommandError::usage(
+                        "pr view accepts exactly one pull request number",
+                    ));
+                }
+
+                let parsed = value.parse::<u64>().map_err(|_| {
+                    CommandError::usage("invalid pull request number: expected a positive integer")
+                })?;
+
+                number = Some(parsed);
+                index += 1;
+            }
+        }
+    }
+
+    let Some(number) = number else {
+        return Err(CommandError::usage(
+            "pr view requires a pull request number",
+        ));
+    };
+
+    Ok(PrViewRequest {
+        output,
+        repo,
+        number,
+    })
+}
+
+fn parse_pr_list_args(args: &[String]) -> Result<PrListRequest, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut repo = None;
+    let mut state = None;
+    let mut author = None;
+    let mut assignee = None;
+    let mut base = None;
+    let mut head = None;
+    let mut limit = 30usize;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => {
+                output = OutputFormat::Json;
+                index += 1;
+            }
+            "--repo" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --repo"));
+                };
+                repo = Some(value.clone());
+                index += 2;
+            }
+            "--state" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --state"));
+                };
+                state = Some(parse_pr_state(value)?);
+                index += 2;
+            }
+            "--author" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --author"));
+                };
+                author = Some(value.clone());
+                index += 2;
+            }
+            "--assignee" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --assignee"));
+                };
+                assignee = Some(value.clone());
+                index += 2;
+            }
+            "--base" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --base"));
+                };
+                base = Some(value.clone());
+                index += 2;
+            }
+            "--head" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --head"));
+                };
+                head = Some(value.clone());
+                index += 2;
+            }
+            "--limit" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --limit"));
+                };
+                limit = parse_limit(value)?;
+                index += 2;
+            }
+            _ => return Err(CommandError::usage("unsupported command")),
+        }
+    }
+
+    Ok(PrListRequest {
+        output,
+        repo,
+        filters: PullRequestListFilters {
+            state,
+            author,
+            assignee,
+            base,
+            head,
+            limit,
+        },
+    })
+}
+
+fn parse_pr_state(value: &str) -> Result<String, CommandError> {
+    match value {
+        "open" | "closed" | "merged" | "all" => Ok(value.to_string()),
+        _ => Err(CommandError::usage(
+            "invalid value for --state: expected open, closed, merged, or all",
+        )),
+    }
+}
+
+fn parse_limit(value: &str) -> Result<usize, CommandError> {
+    let parsed = value.parse::<usize>().map_err(|_| {
+        CommandError::usage("invalid value for --limit: expected a positive integer")
+    })?;
+
+    if parsed == 0 {
+        return Err(CommandError::usage(
+            "invalid value for --limit: expected a positive integer",
+        ));
+    }
+
+    Ok(parsed)
+}
+
+fn parse_pr_status_args(args: &[String]) -> Result<PrStatusRequest, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut state = None;
+    let mut limit = 30usize;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => {
+                output = OutputFormat::Json;
+                index += 1;
+            }
+            "--state" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --state"));
+                };
+                state = Some(parse_pr_state(value)?);
+                index += 2;
+            }
+            "--limit" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --limit"));
+                };
+                limit = parse_limit(value)?;
+                index += 2;
+            }
+            _ => return Err(CommandError::usage("unsupported command")),
+        }
+    }
+
+    Ok(PrStatusRequest {
+        output,
+        filters: PullRequestListFilters {
+            state,
+            author: None,
+            assignee: None,
+            base: None,
+            head: None,
+            limit,
+        },
     })
 }
