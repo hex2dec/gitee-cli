@@ -1,6 +1,10 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
 use serde_json::json;
 
-use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputFormat};
+use crate::command::{CommandError, CommandOutcome, EXIT_GIT, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
 use crate::gitee_api::{GiteeClient, RepoError, Repository};
 use crate::repo_context::infer_repo_context;
@@ -77,6 +81,34 @@ impl RepoService {
             },
         ))
     }
+
+    pub fn clone(&self, request: RepoCloneRequest) -> Result<CommandOutcome, CommandError> {
+        let slug = RepoSlug::parse_positional(&request.repo)?;
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .map(|resolved| resolved.token);
+        let repository = self
+            .client
+            .fetch_repository(&slug.owner, &slug.name, token.as_deref())
+            .map_err(map_repo_error)?;
+        let clone_url = request.transport.select_url(&repository).to_string();
+        let destination = resolve_clone_destination(request.destination.as_deref(), &repository);
+
+        ensure_clone_destination_is_available(&destination)?;
+        run_git_clone(&clone_url, &destination)?;
+
+        Ok(render_repo_clone(
+            request.output,
+            RepoCloneView {
+                repository,
+                clone_url,
+                transport: request.transport,
+                destination: destination.canonicalize().unwrap_or(destination),
+            },
+        ))
+    }
 }
 
 pub struct RepoViewRequest {
@@ -84,10 +116,30 @@ pub struct RepoViewRequest {
     pub repo: Option<String>,
 }
 
+pub struct RepoCloneRequest {
+    pub output: OutputFormat,
+    pub repo: String,
+    pub destination: Option<String>,
+    pub transport: CloneTransport,
+}
+
+#[derive(Clone, Copy)]
+pub enum CloneTransport {
+    Https,
+    Ssh,
+}
+
 struct RepoView {
     source: &'static str,
     current_branch: Option<String>,
     repository: Repository,
+}
+
+struct RepoCloneView {
+    repository: Repository,
+    clone_url: String,
+    transport: CloneTransport,
+    destination: PathBuf,
 }
 
 struct ResolvedRepoView {
@@ -121,6 +173,41 @@ impl RepoSlug {
             owner: owner.to_string(),
             name: name.to_string(),
         })
+    }
+
+    fn parse_positional(value: &str) -> Result<Self, CommandError> {
+        let Some((owner, name)) = value.split_once('/') else {
+            return Err(CommandError::usage(
+                "invalid repository slug: expected owner/repo",
+            ));
+        };
+
+        if owner.is_empty() || name.is_empty() || name.contains('/') {
+            return Err(CommandError::usage(
+                "invalid repository slug: expected owner/repo",
+            ));
+        }
+
+        Ok(Self {
+            owner: owner.to_string(),
+            name: name.to_string(),
+        })
+    }
+}
+
+impl CloneTransport {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Https => "https",
+            Self::Ssh => "ssh",
+        }
+    }
+
+    fn select_url<'a>(self, repository: &'a Repository) -> &'a str {
+        match self {
+            Self::Https => &repository.clone_url,
+            Self::Ssh => &repository.ssh_url,
+        }
     }
 }
 
@@ -156,6 +243,82 @@ fn render_repo_view(output: OutputFormat, view: RepoView) -> CommandOutcome {
             ),
         ),
     }
+}
+
+fn render_repo_clone(output: OutputFormat, view: RepoCloneView) -> CommandOutcome {
+    match output {
+        OutputFormat::Json => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "owner": view.repository.owner,
+                "name": view.repository.name,
+                "full_name": view.repository.full_name,
+                "transport": view.transport.as_str(),
+                "clone_url": view.clone_url,
+                "destination": view.destination.display().to_string(),
+            }),
+        ),
+        OutputFormat::Text => CommandOutcome::text(
+            EXIT_OK,
+            format!(
+                "Cloned {} to {} via {}",
+                view.repository.full_name,
+                view.destination.display(),
+                view.transport.as_str(),
+            ),
+        ),
+    }
+}
+
+fn resolve_clone_destination(destination: Option<&str>, repository: &Repository) -> PathBuf {
+    destination
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(&repository.name))
+}
+
+fn ensure_clone_destination_is_available(destination: &Path) -> Result<(), CommandError> {
+    if !destination.exists() {
+        return Ok(());
+    }
+
+    if destination.is_dir() {
+        let mut entries = fs::read_dir(destination).map_err(|err| CommandError {
+            code: EXIT_GIT,
+            stdout: None,
+            stderr: Some(format!("failed to inspect clone destination: {err}")),
+        })?;
+
+        if entries.next().is_none() {
+            return Ok(());
+        }
+    }
+
+    Err(CommandError::git(format!(
+        "clone destination already exists: {}",
+        destination.display()
+    )))
+}
+
+fn run_git_clone(clone_url: &str, destination: &Path) -> Result<(), CommandError> {
+    let output = Command::new("git")
+        .arg("clone")
+        .arg(clone_url)
+        .arg(destination)
+        .output()
+        .map_err(|err| CommandError::git(format!("failed to run git: {err}")))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let message = if stderr.is_empty() {
+        "git clone failed".to_string()
+    } else {
+        format!("git clone failed: {stderr}")
+    };
+
+    Err(CommandError::git(message))
 }
 
 fn map_repo_error(error: RepoError) -> CommandError {

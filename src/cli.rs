@@ -1,6 +1,6 @@
 use crate::auth::{AuthService, LoginRequest, LoginTokenSource};
 use crate::command::{CommandError, CommandOutcome, OutputFormat};
-use crate::repo::{RepoService, RepoViewRequest};
+use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
 
 pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
     let Some((command, rest)) = args.split_first() else {
@@ -37,6 +37,7 @@ fn run_repo(args: &[String]) -> Result<CommandOutcome, CommandError> {
     let repo = RepoService::from_env();
 
     match subcommand.as_str() {
+        "clone" => repo.clone(parse_repo_clone_args(rest)?),
         "view" => repo.view(parse_repo_view_args(rest)?),
         _ => Err(CommandError::usage("unsupported command")),
     }
@@ -124,4 +125,54 @@ fn parse_repo_view_args(args: &[String]) -> Result<RepoViewRequest, CommandError
     }
 
     Ok(RepoViewRequest { output, repo })
+}
+
+fn parse_repo_clone_args(args: &[String]) -> Result<RepoCloneRequest, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut transport = CloneTransport::Https;
+    let mut positionals = Vec::new();
+    let mut transport_selected = false;
+
+    for arg in args {
+        match arg.as_str() {
+            "--json" => output = OutputFormat::Json,
+            "--https" => {
+                if transport_selected {
+                    return Err(CommandError::usage("provide only one of --https or --ssh"));
+                }
+                transport = CloneTransport::Https;
+                transport_selected = true;
+            }
+            "--ssh" => {
+                if transport_selected {
+                    return Err(CommandError::usage("provide only one of --https or --ssh"));
+                }
+                transport = CloneTransport::Ssh;
+                transport_selected = true;
+            }
+            value if value.starts_with("--") => {
+                return Err(CommandError::usage("unsupported command"));
+            }
+            value => positionals.push(value.to_string()),
+        }
+    }
+
+    let Some(repo) = positionals.first() else {
+        return Err(CommandError::usage(
+            "repo clone requires an owner/repo slug",
+        ));
+    };
+
+    if positionals.len() > 2 {
+        return Err(CommandError::usage(
+            "repo clone accepts at most one destination path",
+        ));
+    }
+
+    Ok(RepoCloneRequest {
+        output,
+        repo: repo.clone(),
+        destination: positionals.get(1).cloned(),
+        transport,
+    })
 }
