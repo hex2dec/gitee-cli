@@ -7,7 +7,9 @@ use crate::issue::{
     IssueCommentBodySource, IssueCommentRequest, IssueListRequest, IssueService, IssueStateFilter,
     IssueViewRequest,
 };
-use crate::pr::{PrListRequest, PrService, PrStatusRequest, PrViewRequest};
+use crate::pr::{
+    PrCreateRequest, PrListRequest, PrService, PrStatusRequest, PrTextSource, PrViewRequest,
+};
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
 
 pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
@@ -62,6 +64,7 @@ fn run_pr(args: &[String]) -> Result<CommandOutcome, CommandError> {
     let pr = PrService::from_env();
 
     match subcommand.as_str() {
+        "create" => pr.create(parse_pr_create_args(rest)?),
         "list" => pr.list(parse_pr_list_args(rest)?),
         "status" => pr.status(parse_pr_status_args(rest)?),
         "view" => pr.view(parse_pr_view_args(rest)?),
@@ -573,6 +576,91 @@ fn parse_pr_list_args(args: &[String]) -> Result<PrListRequest, CommandError> {
             head,
             limit,
         },
+    })
+}
+
+fn parse_pr_create_args(args: &[String]) -> Result<PrCreateRequest, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut repo = None;
+    let mut head = None;
+    let mut base = None;
+    let mut title = None;
+    let mut body = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => {
+                output = OutputFormat::Json;
+                index += 1;
+            }
+            "--repo" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --repo"));
+                };
+                repo = Some(value.clone());
+                index += 2;
+            }
+            "--head" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --head"));
+                };
+                head = Some(value.clone());
+                index += 2;
+            }
+            "--base" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --base"));
+                };
+                base = Some(value.clone());
+                index += 2;
+            }
+            "--title" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --title"));
+                };
+                title = Some(value.clone());
+                index += 2;
+            }
+            "--body" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --body"));
+                };
+                if body.is_some() {
+                    return Err(CommandError::usage(
+                        "provide only one of --body or --body-file",
+                    ));
+                }
+                body = Some(PrTextSource::Inline(value.clone()));
+                index += 2;
+            }
+            "--body-file" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --body-file"));
+                };
+                if body.is_some() {
+                    return Err(CommandError::usage(
+                        "provide only one of --body or --body-file",
+                    ));
+                }
+                body = Some(PrTextSource::File(value.clone()));
+                index += 2;
+            }
+            _ => return Err(CommandError::usage("unsupported command")),
+        }
+    }
+
+    let Some(title) = title else {
+        return Err(CommandError::usage("pr create requires --title"));
+    };
+
+    Ok(PrCreateRequest {
+        output,
+        repo,
+        head,
+        base,
+        title,
+        body,
     })
 }
 
