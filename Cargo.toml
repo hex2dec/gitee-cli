@@ -3,6 +3,13 @@ name = "gitee-cli"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+description = "Agent-first CLI for gitee.com workflows"
+readme = "README.md"
+repository = "https://github.com/hex2dec/gitee-cli"
+homepage = "https://github.com/hex2dec/gitee-cli"
+rust-version = "1.94.0"
+keywords = ["gitee", "cli", "git", "automation"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "gitee"

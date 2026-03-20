@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+
+    env:
+      ASSET_BASENAME: gitee-${{ github.ref_name }}-${{ matrix.target }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Read Rust version
+        id: rust-version
+        run: echo "version=$(awk '/^rust / { print $2 }' .tool-versions)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "${{ steps.rust-version.outputs.version }}" --profile minimal
+          rustup default "${{ steps.rust-version.outputs.version }}"
+          rustup target add "${{ matrix.target }}"
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Build release binary
+        run: cargo build --locked --release --target "${{ matrix.target }}"
+
+      - name: Package release archive
+        run: |
+          mkdir -p "dist/${ASSET_BASENAME}"
+          cp "target/${{ matrix.target }}/release/gitee" "dist/${ASSET_BASENAME}/gitee"
+          cp LICENSE README.md README_CN.md "dist/${ASSET_BASENAME}/"
+          tar -C dist -czf "dist/${ASSET_BASENAME}.tar.gz" "${ASSET_BASENAME}"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/${{ env.ASSET_BASENAME }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          shasum -a 256 *.tar.gz > "gitee-${GITHUB_REF_NAME}-checksums.txt"
+
+      - name: Create or update draft GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          working_directory: release-assets
+          files: |
+            *.tar.gz
+            gitee-${{ github.ref_name }}-checksums.txt

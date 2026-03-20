@@ -53,9 +53,22 @@ Use `gitee-cli` if you want:
 - write operations that accept flags, files, or stdin instead of prompts
 - predictable behavior that can be scripted safely
 
-## Start Here
+## Install
 
-Today the project is built from source.
+Tagged GitHub releases publish prebuilt binaries for:
+
+- Apple Silicon macOS: `aarch64-apple-darwin`
+- Linux x86_64: `x86_64-unknown-linux-musl`
+
+Download the matching archive from the GitHub Releases page, extract it, and
+place `gitee` somewhere on your `PATH`.
+
+Each release also includes `gitee-<version>-checksums.txt`.
+
+## Build From Source
+
+If you need a development build or a platform outside the published release
+assets, build from source:
 
 Build the binary locally:
 
@@ -325,6 +338,24 @@ cargo run -- repo view --repo octo/demo --json
 cargo run -- issue list --repo octo/demo --json
 cargo run -- pr list --repo octo/demo --json
 ```
+
+## Release Process
+
+GitHub Releases are built from tags that match `v*`.
+
+- The macOS archive is built on `macos-14` for `aarch64-apple-darwin`.
+- The Linux archive is built on `ubuntu-latest` for `x86_64-unknown-linux-musl`.
+- The workflow creates or updates a draft GitHub release.
+- Each draft release uploads both archives plus a checksum file.
+
+To cut a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Then review the draft release on GitHub and publish it manually.
 
 ## License
 
