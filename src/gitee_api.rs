@@ -8,6 +8,10 @@ pub struct GiteeClient {
     base_url: String,
 }
 
+pub struct CreatePullRequestComment<'a> {
+    pub body: &'a str,
+}
+
 pub struct CreatePullRequest<'a> {
     pub title: &'a str,
     pub head: &'a str,
@@ -403,6 +407,45 @@ impl GiteeClient {
         Err(RepoError::UnexpectedStatus(response.status().as_u16()))
     }
 
+    pub fn create_pull_request_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        token: &str,
+        request: &CreatePullRequestComment<'_>,
+    ) -> Result<PullRequestComment, PullRequestError> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/v5/repos/{owner}/{repo}/pulls/{number}/comments",
+                self.base_url
+            ))
+            .query(&[("access_token", token)])
+            .form(&[("body", request.body)])
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            let comment = response
+                .json::<PullRequestCommentResponse>()
+                .map_err(PullRequestError::Transport)?;
+            return Ok(comment.into_pull_request_comment());
+        }
+
+        if matches!(response.status().as_u16(), 400 | 401) {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if response.status().as_u16() == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        Err(PullRequestError::UnexpectedStatus(
+            response.status().as_u16(),
+        ))
+    }
+
     pub fn create_pull_request(
         &self,
         owner: &str,
@@ -551,6 +594,16 @@ pub struct PullRequest {
     pub merged_at: Option<String>,
 }
 
+pub struct PullRequestComment {
+    pub id: u64,
+    pub body: String,
+    pub author: String,
+    pub html_url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub comment_type: String,
+}
+
 pub struct PullRequestBranch {
     pub r#ref: String,
     pub sha: String,
@@ -634,6 +687,18 @@ struct PullRequestResponse {
     user: PullRequestUserResponse,
     head: PullRequestBranchResponse,
     base: PullRequestBranchResponse,
+}
+
+#[derive(Deserialize)]
+struct PullRequestCommentResponse {
+    id: u64,
+    body: String,
+    html_url: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(default)]
+    comment_type: Option<String>,
+    user: PullRequestUserResponse,
 }
 
 #[derive(Deserialize)]
@@ -755,6 +820,22 @@ impl PullRequestBranchResponse {
                 .repo
                 .map(|repo| repo.full_name)
                 .unwrap_or_else(|| default_repository.to_string()),
+        }
+    }
+}
+
+impl PullRequestCommentResponse {
+    fn into_pull_request_comment(self) -> PullRequestComment {
+        PullRequestComment {
+            id: self.id,
+            body: self.body,
+            author: self.user.login,
+            html_url: self.html_url,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            comment_type: self
+                .comment_type
+                .unwrap_or_else(|| "pr_comment".to_string()),
         }
     }
 }
