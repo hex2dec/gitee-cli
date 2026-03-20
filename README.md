@@ -61,10 +61,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 - `GITEE_TOKEN`: overrides the saved token at runtime
 - `GITEE_CONFIG_DIR`: sets the config directory directly
-- `XDG_CONFIG_HOME`: used when `GITEE_CONFIG_DIR` is unset
 - `GITEE_BASE_URL`: useful for tests or local API mocking
-
-Saved credentials default to `~/.config/gitee-cli/config.toml`.
 
 ## License
 
