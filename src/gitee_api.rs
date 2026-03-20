@@ -1,11 +1,42 @@
 use std::env;
 
 use reqwest::blocking::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub struct GiteeClient {
     client: Client,
     base_url: String,
+}
+
+pub struct CreatePullRequestComment<'a> {
+    pub body: &'a str,
+}
+
+pub struct CreatePullRequest<'a> {
+    pub title: &'a str,
+    pub head: &'a str,
+    pub base: &'a str,
+    pub body: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+struct CreatePullRequestPayload<'a> {
+    access_token: &'a str,
+    title: &'a str,
+    head: &'a str,
+    base: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<&'a str>,
+}
+
+#[derive(Deserialize)]
+struct ApiErrorResponse {
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
 }
 
 impl GiteeClient {
@@ -375,6 +406,92 @@ impl GiteeClient {
 
         Err(RepoError::UnexpectedStatus(response.status().as_u16()))
     }
+
+    pub fn create_pull_request_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        token: &str,
+        request: &CreatePullRequestComment<'_>,
+    ) -> Result<PullRequestComment, PullRequestError> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/v5/repos/{owner}/{repo}/pulls/{number}/comments",
+                self.base_url
+            ))
+            .query(&[("access_token", token)])
+            .form(&[("body", request.body)])
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            let comment = response
+                .json::<PullRequestCommentResponse>()
+                .map_err(PullRequestError::Transport)?;
+            return Ok(comment.into_pull_request_comment());
+        }
+
+        if matches!(response.status().as_u16(), 400 | 401) {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if response.status().as_u16() == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        Err(PullRequestError::UnexpectedStatus(
+            response.status().as_u16(),
+        ))
+    }
+
+    pub fn create_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        token: &str,
+        request: &CreatePullRequest<'_>,
+    ) -> Result<PullRequest, PullRequestError> {
+        let response = self
+            .client
+            .post(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url))
+            .json(&CreatePullRequestPayload {
+                access_token: token,
+                title: request.title,
+                head: request.head,
+                base: request.base,
+                body: request.body,
+            })
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            let pull_request = response
+                .json::<PullRequestResponse>()
+                .map_err(PullRequestError::Transport)?;
+            return Ok(pull_request.into_pull_request(owner, repo));
+        }
+
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if status == 401 {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if status == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
+    }
 }
 
 fn resolve_base_url(value: Option<String>) -> String {
@@ -409,6 +526,7 @@ pub enum PullRequestError {
     NotFound,
     Transport(reqwest::Error),
     UnexpectedStatus(u16),
+    UnexpectedStatusWithMessage(u16, String),
 }
 
 #[derive(Clone)]
@@ -474,6 +592,16 @@ pub struct PullRequest {
     pub created_at: String,
     pub updated_at: String,
     pub merged_at: Option<String>,
+}
+
+pub struct PullRequestComment {
+    pub id: u64,
+    pub body: String,
+    pub author: String,
+    pub html_url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub comment_type: String,
 }
 
 pub struct PullRequestBranch {
@@ -559,6 +687,18 @@ struct PullRequestResponse {
     user: PullRequestUserResponse,
     head: PullRequestBranchResponse,
     base: PullRequestBranchResponse,
+}
+
+#[derive(Deserialize)]
+struct PullRequestCommentResponse {
+    id: u64,
+    body: String,
+    html_url: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(default)]
+    comment_type: Option<String>,
+    user: PullRequestUserResponse,
 }
 
 #[derive(Deserialize)]
@@ -684,12 +824,44 @@ impl PullRequestBranchResponse {
     }
 }
 
+impl PullRequestCommentResponse {
+    fn into_pull_request_comment(self) -> PullRequestComment {
+        PullRequestComment {
+            id: self.id,
+            body: self.body,
+            author: self.user.login,
+            html_url: self.html_url,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            comment_type: self
+                .comment_type
+                .unwrap_or_else(|| "pr_comment".to_string()),
+        }
+    }
+}
+
 fn normalize_html_url(value: &str, full_name: &str) -> String {
     if value.is_empty() {
         return format!("https://gitee.com/{full_name}");
     }
 
     value.trim_end_matches(".git").to_string()
+}
+
+fn parse_api_error_message(response: reqwest::blocking::Response) -> Option<String> {
+    let body = response.text().ok()?;
+    if body.trim().is_empty() {
+        return None;
+    }
+
+    if let Ok(payload) = serde_json::from_str::<ApiErrorResponse>(&body) {
+        return payload
+            .message
+            .or(payload.error_description)
+            .or(payload.error);
+    }
+
+    Some(body)
 }
 
 #[cfg(test)]
