@@ -2,7 +2,7 @@ use crate::auth::{AuthService, LoginRequest, LoginTokenSource};
 use crate::command::{CommandError, CommandOutcome, OutputFormat};
 use crate::gitee_api::PullRequestListFilters;
 use crate::issue::{IssueListRequest, IssueService, IssueStateFilter, IssueViewRequest};
-use crate::pr::{PrListRequest, PrService, PrStatusRequest, PrViewRequest};
+use crate::pr::{PrCheckoutRequest, PrListRequest, PrService, PrStatusRequest, PrViewRequest};
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
 
 pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
@@ -56,6 +56,7 @@ fn run_pr(args: &[String]) -> Result<CommandOutcome, CommandError> {
     let pr = PrService::from_env();
 
     match subcommand.as_str() {
+        "checkout" => pr.checkout(parse_pr_checkout_args(rest)?),
         "list" => pr.list(parse_pr_list_args(rest)?),
         "status" => pr.status(parse_pr_status_args(rest)?),
         "view" => pr.view(parse_pr_view_args(rest)?),
@@ -478,6 +479,57 @@ fn parse_pr_list_args(args: &[String]) -> Result<PrListRequest, CommandError> {
             head,
             limit,
         },
+    })
+}
+
+fn parse_pr_checkout_args(args: &[String]) -> Result<PrCheckoutRequest, CommandError> {
+    let mut output = OutputFormat::Text;
+    let mut repo = None;
+    let mut number = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => {
+                output = OutputFormat::Json;
+                index += 1;
+            }
+            "--repo" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err(CommandError::usage("missing value for --repo"));
+                };
+                repo = Some(value.clone());
+                index += 2;
+            }
+            value if value.starts_with("--") => {
+                return Err(CommandError::usage("unsupported command"));
+            }
+            value => {
+                if number.is_some() {
+                    return Err(CommandError::usage(
+                        "pr checkout accepts exactly one pull request number",
+                    ));
+                }
+
+                let parsed = value.parse::<u64>().map_err(|_| {
+                    CommandError::usage("invalid pull request number: expected a positive integer")
+                })?;
+                number = Some(parsed);
+                index += 1;
+            }
+        }
+    }
+
+    let Some(number) = number else {
+        return Err(CommandError::usage(
+            "pr checkout requires a pull request number",
+        ));
+    };
+
+    Ok(PrCheckoutRequest {
+        output,
+        repo,
+        number,
     })
 }
 
