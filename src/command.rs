@@ -3,6 +3,8 @@ pub const EXIT_USAGE: u8 = 2;
 pub const EXIT_AUTH: u8 = 3;
 pub const EXIT_CONFIG: u8 = 4;
 pub const EXIT_REMOTE: u8 = 5;
+pub const EXIT_NOT_FOUND: u8 = 6;
+pub const EXIT_GIT: u8 = 7;
 
 pub struct CommandOutcome {
     pub code: u8,
@@ -45,6 +47,22 @@ impl CommandError {
             code: EXIT_CONFIG,
             stdout: None,
             stderr: Some(format!("config error: {error}")),
+        }
+    }
+
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self {
+            code: EXIT_NOT_FOUND,
+            stdout: None,
+            stderr: Some(message.into()),
+        }
+    }
+
+    pub fn git(message: impl Into<String>) -> Self {
+        Self {
+            code: EXIT_GIT,
+            stdout: None,
+            stderr: Some(message.into()),
         }
     }
 }

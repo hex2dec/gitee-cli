@@ -98,6 +98,71 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
 }
 
 #[test]
+fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
+    let home_dir = TempDir::new().unwrap();
+    let login_dir = TempDir::new().unwrap();
+    let status_dir = TempDir::new().unwrap();
+    let server = MockServer::start();
+
+    let expected_config_path = home_dir.path().join(".config/gitee-cli/config.toml");
+
+    let user_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/user")
+            .query_param("access_token", "home-token");
+        then.status(200).json_body(serde_json::json!({
+            "login": "home-user"
+        }));
+    });
+
+    let login_output = Command::cargo_bin("gitee-cli")
+        .unwrap()
+        .current_dir(login_dir.path())
+        .env("HOME", home_dir.path())
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("GITEE_CONFIG_DIR")
+        .env_remove("GITEE_TOKEN")
+        .env("GITEE_BASE_URL", server.base_url())
+        .args(["auth", "login", "--token", "home-token", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(login_output.status.code(), Some(0));
+    let login_body: Value = serde_json::from_slice(&login_output.stdout).unwrap();
+    assert_eq!(login_body["authenticated"], true);
+    assert_eq!(login_body["source"], "config");
+    assert_eq!(login_body["username"], "home-user");
+    assert_eq!(
+        login_body["config_path"],
+        expected_config_path.display().to_string()
+    );
+
+    let status_output = Command::cargo_bin("gitee-cli")
+        .unwrap()
+        .current_dir(status_dir.path())
+        .env("HOME", home_dir.path())
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("GITEE_CONFIG_DIR")
+        .env_remove("GITEE_TOKEN")
+        .env("GITEE_BASE_URL", server.base_url())
+        .args(["auth", "status", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(status_output.status.code(), Some(0));
+    let status_body: Value = serde_json::from_slice(&status_output.stdout).unwrap();
+    assert_eq!(status_body["authenticated"], true);
+    assert_eq!(status_body["source"], "config");
+    assert_eq!(status_body["username"], "home-user");
+    assert_eq!(
+        status_body["config_path"],
+        expected_config_path.display().to_string()
+    );
+    assert!(expected_config_path.exists());
+    user_mock.assert_hits(2);
+}
+
+#[test]
 fn auth_login_can_read_the_token_from_stdin() {
     let config_dir = TempDir::new().unwrap();
     let server = MockServer::start();
