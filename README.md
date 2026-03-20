@@ -1,10 +1,51 @@
-# gitee-cli
+# Agent-First Workflows for gitee.com
 
-`gitee-cli` is a small Rust command-line tool for Gitee authentication, repository inspection and cloning, issue workflows, and pull request workflows.
+`gitee-cli` is an agent-first command-line tool for working with `gitee.com`
+from scripts, local terminals, and AI-driven workflows.
+
+It gives you a small, stable command surface for authentication, repository
+inspection, issue triage, and pull request workflows without dropping down to
+raw Gitee API calls.
 
 The installed executable is named `gitee`.
 
-## Quick Start
+> `gitee-cli` is an unofficial community project. It is not affiliated with,
+> endorsed by, or sponsored by Gitee or `gitee.com`.
+>
+> Gitee and `gitee.com` are trademarks or registered trademarks of their
+> respective owner. They are referenced here only to identify platform
+> compatibility.
+
+## Why This Exists
+
+`gitee-cli` is built for the high-frequency Gitee tasks that show up in
+automation and day-to-day development:
+
+- checking whether auth is usable before starting work
+- inspecting repository metadata from a slug or a local checkout
+- reading issue history before making a change
+- viewing, listing, creating, commenting on, and checking out pull requests
+- producing stable `--json` output and meaningful exit codes for scripts
+
+The project is intentionally opinionated:
+
+- it targets `gitee.com`
+- it prefers explicit, non-interactive workflows
+- it supports both human-readable output and stable `--json`
+- it uses local git context when that makes common workflows faster
+
+## Who It Is For
+
+Use `gitee-cli` if you want:
+
+- a Gitee workflow tool that fits AI agents and automation
+- a terminal-friendly way to inspect repos, issues, and pull requests
+- write operations that accept flags, files, or stdin instead of prompts
+- predictable behavior that can be scripted safely
+
+## Start Here
+
+Today the project is built from source.
 
 Build the binary locally:
 
@@ -18,41 +59,64 @@ Run commands from the repository during development:
 cargo run -- auth status --json
 ```
 
-### Authentication
-
-Check whether a usable token is available:
-
-```bash
-gitee auth status --json
-```
-
-Validate and save a token from a flag:
+Authenticate with a token:
 
 ```bash
 gitee auth login --token "$GITEE_TOKEN" --json
 ```
 
-Validate and save a token from stdin:
+Check that auth is usable:
 
 ```bash
-printf '%s\n' "$TOKEN" | gitee auth login --with-token --json
+gitee auth status --json
 ```
 
-Clear the saved token:
-
-```bash
-gitee auth logout --json
-```
-
-### Repository Commands
-
-View repository metadata by explicit slug:
+Inspect a repository directly:
 
 ```bash
 gitee repo view --repo octo/demo --json
 ```
 
-Inside a local Gitee checkout, infer the repository from `origin`:
+Or, inside a local Gitee checkout, let `gitee-cli` infer the repository from
+`origin`:
+
+```bash
+gitee repo view --json
+```
+
+If you only try one end-to-end workflow, start here:
+
+1. Build the CLI.
+2. Log in with a personal access token.
+3. Run `gitee repo view --repo octo/demo --json`.
+4. Move into a local checkout and run `gitee pr status --state open --limit 10 --json`.
+
+## Common Workflows
+
+### Check Authentication Before Doing Work
+
+Use `auth status` when a script or agent needs to fail fast before it touches a
+repository or API:
+
+```bash
+gitee auth status --json
+```
+
+To save a token from stdin instead of a flag:
+
+```bash
+printf '%s\n' "$TOKEN" | gitee auth login --with-token --json
+```
+
+### Inspect a Repository Quickly
+
+When you know the repository slug:
+
+```bash
+gitee repo view --repo octo/demo --json
+```
+
+When you are already inside a local checkout:
 
 ```bash
 gitee repo view --json
@@ -70,41 +134,33 @@ Clone over SSH to an explicit destination:
 gitee repo clone octo/demo demo-ssh --ssh --json
 ```
 
-### Issue Commands
+### Read Issue Context Before Making a Change
 
-List issues for the current local repository:
+List open issues for the current repository:
 
 ```bash
 gitee issue list --state open --page 1 --per-page 20 --json
 ```
 
-List issues for an explicit repository with filters:
-
-```bash
-gitee issue list --repo octo/demo --state closed --search panic --page 2 --per-page 5 --json
-```
-
-View a single issue:
+View one issue in an explicit repository:
 
 ```bash
 gitee issue view I123 --repo octo/demo --json
 ```
 
-Include paginated comment history when viewing an issue:
+Include comment history when you need prior discussion:
 
 ```bash
-gitee issue view I123 --repo octo/demo --comments --page 2 --per-page 10 --json
+gitee issue view I123 --repo octo/demo --comments --page 1 --per-page 20 --json
 ```
 
-Post an issue comment from a flag, file, or stdin:
+Post a follow-up comment non-interactively:
 
 ```bash
 gitee issue comment I123 --repo octo/demo --body "Thanks for the report" --json
-gitee issue comment I123 --repo octo/demo --body-file ./comment.txt
-printf '%s' "Posted from stdin" | gitee issue comment I123 --repo octo/demo --body-stdin --json
 ```
 
-### Pull Request Commands
+### Work with Pull Requests Without Leaving the Terminal
 
 View a pull request:
 
@@ -115,60 +171,44 @@ gitee pr view 42 --repo octo/demo --json
 List pull requests with filters:
 
 ```bash
-gitee pr list --repo octo/demo --state open --author octocat --assignee reviewer --base main --head feature/pr-list --limit 10 --json
+gitee pr list --repo octo/demo --state open --author octocat --limit 10 --json
 ```
 
-Show the current branch PRs plus PRs authored by or assigned to the current user:
+Show the pull requests related to the current branch or current user:
 
 ```bash
 gitee pr status --state open --limit 10 --json
 ```
 
-Create a pull request with an explicit head:
-
-```bash
-gitee pr create --repo octo/demo --head feature/pr-create --base main --title "Add PR create" --body "Creates the pull request" --json
-```
-
-Create a pull request from the current local branch, letting `gitee-cli` infer `--head` and the repository:
+Create a pull request from the current branch:
 
 ```bash
 gitee pr create --title "Use local head" --base develop --body "Built from the local branch"
 ```
 
-Read a PR body from a file or from stdin:
+Read a PR body from a file:
 
 ```bash
 gitee pr create --repo octo/demo --head feature/body-file --title "Read body file" --body-file ./body.md --json
-printf '%s\n' "Generated from stdin" | gitee pr create --repo octo/demo --head feature/stdin --base main --title "Read stdin" --body-file - --json
 ```
 
 Comment on a pull request:
 
 ```bash
 gitee pr comment 42 --repo octo/demo --body "Ship it" --json
-gitee pr comment 42 --repo octo/demo --body-file ./review.md
 ```
 
-Check out the pull request head branch into the current local repository:
+Check out a pull request head branch into the current local repository:
 
 ```bash
 gitee pr checkout 42 --repo octo/demo --json
 ```
 
-## Repository Context Inference
+## Local Repository Context
 
-When `--repo` is omitted, `gitee-cli` tries to infer the repository from the local git checkout by reading:
-
-- the current branch
-- the `origin` remote URL
-
-Supported `origin` URL forms are:
-
-- `git@gitee.com:owner/repo.git`
-- `ssh://git@gitee.com/owner/repo.git`
-- `https://gitee.com/owner/repo.git`
-- `http://gitee.com/owner/repo.git`
+When `--repo` is omitted, `gitee-cli` tries to infer the repository from the
+local git checkout. That keeps common commands short when you are already in the
+right repository.
 
 Commands that can use local repository context include:
 
@@ -183,11 +223,35 @@ Commands that can use local repository context include:
 - `pr checkout`
 - `pr status`
 
-`pr status` always requires a local git checkout. `pr checkout` also requires a local git checkout with an `origin` remote.
+`pr status` always requires a local git checkout. `pr checkout` also requires a
+local git checkout with an `origin` remote.
 
-## Authentication and Configuration
+<details>
+<summary>Supported <code>origin</code> URL forms</summary>
 
-Token resolution order:
+- `git@gitee.com:owner/repo.git`
+- `ssh://git@gitee.com/owner/repo.git`
+- `https://gitee.com/owner/repo.git`
+- `http://gitee.com/owner/repo.git`
+
+</details>
+
+## Authentication And Configuration
+
+Most read operations can work without a saved token when the target repository
+is public. Authentication is required for write operations and for some
+user-specific flows. Private repositories and some human-name fallback lookups
+may still require authentication.
+
+Commands that require authentication:
+
+- `auth login`
+- `issue comment`
+- `pr comment`
+- `pr create`
+- `pr status`
+
+Runtime token resolution order:
 
 1. `GITEE_TOKEN`
 2. saved config file token
@@ -199,27 +263,30 @@ Config directory resolution order:
 3. `HOME/.config/gitee`
 4. current directory `./.gitee`
 
-Relevant environment variables:
+By default the saved token lives at `~/.config/gitee/config.toml`.
+
+<details>
+<summary>Relevant environment variables</summary>
 
 - `GITEE_TOKEN`: overrides the saved token at runtime
 - `GITEE_CONFIG_DIR`: points directly to the config directory
 - `XDG_CONFIG_HOME`: used when `GITEE_CONFIG_DIR` is not set
 - `HOME`: used for the default config path
-- `GITEE_BASE_URL`: overrides the API base URL, which defaults to `https://gitee.com/api`; mainly useful for tests
+- `GITEE_BASE_URL`: overrides the API base URL, which defaults to
+  `https://gitee.com/api`; mainly useful for tests or local API mocking
 
-By default the saved token lives at `~/.config/gitee/config.toml`.
+</details>
 
-Commands that require authentication:
+## Automation Contracts
 
-- `auth login`
-- `issue comment`
-- `pr comment`
-- `pr create`
-- `pr status`
+`gitee-cli` is designed to be scriptable:
 
-Other commands can run without a token for public repositories, but private repositories and human-name fallback lookups may still require authentication.
+- successful output goes to `stdout`
+- errors go to `stderr`
+- core commands support `--json`
+- exit codes are stable enough to branch on in automation
 
-## Exit Codes
+Exit codes:
 
 - `0`: success
 - `2`: usage error
