@@ -1,7 +1,7 @@
 use std::env;
 
 use reqwest::blocking::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub struct GiteeClient {
     client: Client,
@@ -13,6 +13,16 @@ pub struct CreatePullRequest<'a> {
     pub head: &'a str,
     pub base: &'a str,
     pub body: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+struct CreatePullRequestPayload<'a> {
+    access_token: &'a str,
+    title: &'a str,
+    head: &'a str,
+    base: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<&'a str>,
 }
 
 impl GiteeClient {
@@ -352,21 +362,16 @@ impl GiteeClient {
         token: &str,
         request: &CreatePullRequest<'_>,
     ) -> Result<PullRequest, PullRequestError> {
-        let mut form = vec![
-            ("title", request.title.to_string()),
-            ("head", request.head.to_string()),
-            ("base", request.base.to_string()),
-        ];
-
-        if let Some(body) = request.body {
-            form.push(("body", body.to_string()));
-        }
-
         let response = self
             .client
             .post(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url))
-            .query(&[("access_token", token)])
-            .form(&form)
+            .json(&CreatePullRequestPayload {
+                access_token: token,
+                title: request.title,
+                head: request.head,
+                base: request.base,
+                body: request.body,
+            })
             .send()
             .map_err(PullRequestError::Transport)?;
 

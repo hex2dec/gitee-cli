@@ -28,11 +28,12 @@ fn pr_create_uses_explicit_head_and_inferred_base_in_json_output() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
-            .body_contains("title=Add+PR+create")
-            .body_contains("head=feature%2Fpr-create")
-            .body_contains("base=main")
-            .body_contains("body=Creates+the+pull+request");
+            .header("content-type", "application/json")
+            .body_contains("\"access_token\":\"secret-token\"")
+            .body_contains("\"title\":\"Add PR create\"")
+            .body_contains("\"head\":\"feature/pr-create\"")
+            .body_contains("\"base\":\"main\"")
+            .body_contains("\"body\":\"Creates the pull request\"");
         then.status(201).json_body(pull_request_payload(
             42,
             "Add PR create",
@@ -92,11 +93,12 @@ fn pr_create_infers_local_head_and_renders_text_output() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
-            .body_contains("title=Use+local+head")
-            .body_contains("head=feature%2Flocal-head")
-            .body_contains("base=develop")
-            .body_contains("body=Built+from+the+local+branch");
+            .header("content-type", "application/json")
+            .body_contains("\"access_token\":\"secret-token\"")
+            .body_contains("\"title\":\"Use local head\"")
+            .body_contains("\"head\":\"feature/local-head\"")
+            .body_contains("\"base\":\"develop\"")
+            .body_contains("\"body\":\"Built from the local branch\"");
         then.status(201).json_body(pull_request_payload(
             43,
             "Use local head",
@@ -150,11 +152,12 @@ fn pr_create_reads_body_from_a_file() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
-            .body_contains("title=Read+body+file")
-            .body_contains("head=feature%2Fbody-file")
-            .body_contains("base=main")
-            .body_contains("body=Generated+from+a+file");
+            .header("content-type", "application/json")
+            .body_contains("\"access_token\":\"secret-token\"")
+            .body_contains("\"title\":\"Read body file\"")
+            .body_contains("\"head\":\"feature/body-file\"")
+            .body_contains("\"base\":\"main\"")
+            .body_contains("\"body\":\"Generated from a file\"");
         then.status(201).json_body(pull_request_payload(
             44,
             "Read body file",
@@ -204,11 +207,12 @@ fn pr_create_reads_body_from_stdin_via_body_file_dash() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
-            .body_contains("title=Read+stdin")
-            .body_contains("head=feature%2Fstdin")
-            .body_contains("base=main")
-            .body_contains("body=Generated+from+stdin%0A");
+            .header("content-type", "application/json")
+            .body_contains("\"access_token\":\"secret-token\"")
+            .body_contains("\"title\":\"Read stdin\"")
+            .body_contains("\"head\":\"feature/stdin\"")
+            .body_contains("\"base\":\"main\"")
+            .body_contains("\"body\":\"Generated from stdin\\n\"");
         then.status(201).json_body(pull_request_payload(
             45,
             "Read stdin",
