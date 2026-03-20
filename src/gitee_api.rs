@@ -12,6 +12,12 @@ pub struct CreatePullRequestComment<'a> {
     pub body: &'a str,
 }
 
+pub struct CreateIssue<'a> {
+    pub repo: &'a str,
+    pub title: &'a str,
+    pub body: Option<&'a str>,
+}
+
 pub struct CreatePullRequest<'a> {
     pub title: &'a str,
     pub head: &'a str,
@@ -306,6 +312,55 @@ impl GiteeClient {
         Err(IssueError::UnexpectedStatus(response.status().as_u16()))
     }
 
+    pub fn create_issue(
+        &self,
+        owner: &str,
+        token: &str,
+        request: &CreateIssue<'_>,
+    ) -> Result<Issue, IssueError> {
+        let mut form = vec![
+            ("access_token", token.to_string()),
+            ("repo", request.repo.to_string()),
+            ("title", request.title.to_string()),
+        ];
+
+        if let Some(body) = request.body {
+            form.push(("body", body.to_string()));
+        }
+
+        let response = self
+            .client
+            .post(format!("{}/v5/repos/{owner}/issues", self.base_url))
+            .form(&form)
+            .send()
+            .map_err(IssueError::Transport)?;
+
+        if response.status().is_success() {
+            let issue = response
+                .json::<IssueResponse>()
+                .map_err(IssueError::Transport)?
+                .into_issue();
+            return Ok(issue);
+        }
+
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if status == 401 {
+            return Err(IssueError::InvalidToken);
+        }
+
+        if status == 404 {
+            return Err(IssueError::NotFound);
+        }
+
+        if let Some(message) = error_message {
+            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
+        }
+
+        Err(IssueError::UnexpectedStatus(status))
+    }
+
     pub fn fetch_pull_request(
         &self,
         owner: &str,
@@ -519,6 +574,7 @@ pub enum IssueError {
     NotFound,
     Transport(reqwest::Error),
     UnexpectedStatus(u16),
+    UnexpectedStatusWithMessage(u16, String),
 }
 
 pub enum PullRequestError {

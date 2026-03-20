@@ -7,7 +7,9 @@ use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_AUTH, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
-use crate::gitee_api::{GiteeClient, Issue, IssueComment, IssueError, IssueListOptions};
+use crate::gitee_api::{
+    CreateIssue, GiteeClient, Issue, IssueComment, IssueError, IssueListOptions,
+};
 use crate::repo_context::infer_repo_context;
 
 pub struct IssueService {
@@ -110,9 +112,51 @@ impl IssueService {
         ))
     }
 
+    pub fn create(&self, request: IssueCreateRequest) -> Result<CommandOutcome, CommandError> {
+        let resolved = resolve_issue_repo(request.repo.as_deref())?;
+        let body = read_optional_issue_body(request.body)?;
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for issue create".to_string()),
+            })?
+            .token;
+        let issue = self
+            .client
+            .create_issue(
+                &resolved.owner,
+                &token,
+                &CreateIssue {
+                    repo: &resolved.name,
+                    title: &request.title,
+                    body: body.as_deref(),
+                },
+            )
+            .map_err(map_issue_create_error)?;
+
+        Ok(render_issue_create(
+            request.output,
+            IssueCreateView {
+                source: resolved.source,
+                owner: resolved.owner,
+                name: resolved.name,
+                issue,
+            },
+        ))
+    }
+
     pub fn comment(&self, request: IssueCommentRequest) -> Result<CommandOutcome, CommandError> {
         let resolved = resolve_issue_repo(request.repo.as_deref())?;
-        let body = read_comment_body(request.body)?;
+        let body = read_required_issue_body(
+            request.body,
+            "failed to read comment body from stdin",
+            "failed to read comment body file",
+            "comment body cannot be empty",
+        )?;
         let token = self
             .config
             .load_runtime_token()
@@ -165,15 +209,22 @@ pub struct IssueViewRequest {
     pub per_page: u32,
 }
 
+pub struct IssueCreateRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub title: String,
+    pub body: Option<IssueBodySource>,
+}
+
 pub struct IssueCommentRequest {
     pub output: OutputFormat,
     pub repo: Option<String>,
     pub number: String,
-    pub body: IssueCommentBodySource,
+    pub body: IssueBodySource,
 }
 
-pub enum IssueCommentBodySource {
-    Flag(String),
+pub enum IssueBodySource {
+    Inline(String),
     File(PathBuf),
 }
 
@@ -225,6 +276,13 @@ struct IssueView {
     comments_page: Option<u32>,
     comments_per_page: Option<u32>,
     comments: Option<Vec<IssueComment>>,
+}
+
+struct IssueCreateView {
+    source: &'static str,
+    owner: String,
+    name: String,
+    issue: Issue,
 }
 
 struct IssueCommentView {
@@ -392,6 +450,41 @@ fn render_issue_view(output: OutputFormat, view: IssueView) -> CommandOutcome {
     }
 }
 
+fn render_issue_create(output: OutputFormat, view: IssueCreateView) -> CommandOutcome {
+    match output {
+        OutputFormat::Json => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "source": view.source,
+                "owner": view.owner,
+                "name": view.name,
+                "number": view.issue.number,
+                "title": view.issue.title,
+                "state": view.issue.state,
+                "author": view.issue.author,
+                "body": view.issue.body,
+                "comments": view.issue.comments,
+                "html_url": view.issue.html_url,
+                "created_at": view.issue.created_at,
+                "updated_at": view.issue.updated_at,
+            }),
+        ),
+        OutputFormat::Text => CommandOutcome::text(
+            EXIT_OK,
+            [
+                format!("Created issue {}", view.issue.number),
+                format!("repository: {}/{}", view.owner, view.name),
+                format!("title: {}", view.issue.title),
+                format!("state: {}", view.issue.state),
+                format!("author: {}", view.issue.author),
+                format!("source: {}", view.source),
+                format!("url: {}", view.issue.html_url),
+            ]
+            .join("\n"),
+        ),
+    }
+}
+
 fn render_issue_comment(output: OutputFormat, view: IssueCommentView) -> CommandOutcome {
     match output {
         OutputFormat::Json => CommandOutcome::json(
@@ -448,32 +541,65 @@ fn resolve_issue_repo(repo: Option<&str>) -> Result<ResolvedIssueRepo, CommandEr
     }
 }
 
-fn read_comment_body(source: IssueCommentBodySource) -> Result<String, CommandError> {
-    let body = match source {
-        IssueCommentBodySource::Flag(body) => body,
-        IssueCommentBodySource::File(path) => {
-            if path.as_os_str() == OsStr::new("-") {
-                let mut input = String::new();
-                io::stdin().read_to_string(&mut input).map_err(|err| {
-                    CommandError::usage(format!("failed to read comment body from stdin: {err}"))
-                })?;
-                input
-            } else {
-                fs::read_to_string(path).map_err(|err| {
-                    CommandError::usage(format!("failed to read comment body file: {err}"))
-                })?
-            }
-        }
-    };
+fn read_required_issue_body(
+    source: IssueBodySource,
+    stdin_error: &str,
+    file_error: &str,
+    empty_error: &str,
+) -> Result<String, CommandError> {
+    let body = read_issue_body(source, stdin_error, file_error)?;
 
     if body.trim().is_empty() {
-        return Err(CommandError::usage("comment body cannot be empty"));
+        return Err(CommandError::usage(empty_error));
     }
 
     Ok(body)
 }
 
+fn read_optional_issue_body(
+    source: Option<IssueBodySource>,
+) -> Result<Option<String>, CommandError> {
+    match source {
+        Some(source) => read_required_issue_body(
+            source,
+            "failed to read issue body from stdin",
+            "failed to read issue body file",
+            "issue body cannot be empty",
+        )
+        .map(Some),
+        None => Ok(None),
+    }
+}
+
+fn read_issue_body(
+    source: IssueBodySource,
+    stdin_error: &str,
+    file_error: &str,
+) -> Result<String, CommandError> {
+    let body = match source {
+        IssueBodySource::Inline(body) => body,
+        IssueBodySource::File(path) => {
+            if path.as_os_str() == OsStr::new("-") {
+                let mut input = String::new();
+                io::stdin()
+                    .read_to_string(&mut input)
+                    .map_err(|err| CommandError::usage(format!("{stdin_error}: {err}")))?;
+                input
+            } else {
+                fs::read_to_string(path)
+                    .map_err(|err| CommandError::usage(format!("{file_error}: {err}")))?
+            }
+        }
+    };
+
+    Ok(body)
+}
+
 fn map_issue_list_error(error: IssueError) -> CommandError {
+    map_issue_error(error, "repository not found")
+}
+
+fn map_issue_create_error(error: IssueError) -> CommandError {
     map_issue_error(error, "repository not found")
 }
 
@@ -495,6 +621,11 @@ fn map_issue_error(error: IssueError, not_found_message: &str) -> CommandError {
             stderr: Some(format!(
                 "remote request returned unexpected status: {status}"
             )),
+        },
+        IssueError::UnexpectedStatusWithMessage(status, message) => CommandError {
+            code: EXIT_REMOTE,
+            stdout: None,
+            stderr: Some(format!("remote request failed ({status}): {message}")),
         },
         IssueError::NotFound => CommandError::not_found(not_found_message),
     }
