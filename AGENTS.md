@@ -4,7 +4,7 @@
 `gitee-cli` is a small Rust CLI. Keep executable startup thin in `src/main.rs`; route argument handling through `src/cli.rs`; and place feature logic in focused modules such as `src/auth.rs`, `src/repo.rs`, `src/config.rs`, `src/gitee_api.rs`, and `src/repo_context.rs`. Shared exports live in `src/lib.rs`. Put end-to-end CLI coverage in `tests/`, which currently contains `auth_cli.rs` and `repo_view_cli.rs`.
 
 ## Build, Test, and Development Commands
-Use the Rust toolchain pinned in [`.tool-versions`](/private/tmp/gitee-cli/.tool-versions) (`rust 1.94.0`).
+Use the Rust toolchain pinned in [`.tool-versions`](./.tool-versions) (`rust 1.94.0`).
 
 - `cargo build` compiles the CLI.
 - `cargo run -- auth status --json` runs a local command against the binary.

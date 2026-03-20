@@ -2,6 +2,7 @@
 name = "gitee-cli"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls"] }
