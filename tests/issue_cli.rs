@@ -336,6 +336,276 @@ fn issue_comment_rejects_missing_body_input() {
 }
 
 #[test]
+fn issue_comment_rejects_body_and_body_file_together() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let body_path = temp_dir.path().join("comment.txt");
+    std::fs::write(&body_path, "Posted from file").unwrap();
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body",
+            "Posted from flag",
+            "--body-file",
+            body_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "provide only one of --body, --body-file, or --body-stdin"
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[test]
+fn issue_comment_rejects_body_and_body_stdin_together() {
+    let server = MockServer::start();
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .write_stdin("Posted from stdin")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body",
+            "Posted from flag",
+            "--body-stdin",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "provide only one of --body, --body-file, or --body-stdin"
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[test]
+fn issue_comment_rejects_body_file_and_body_stdin_together() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let body_path = temp_dir.path().join("comment.txt");
+    std::fs::write(&body_path, "Posted from file").unwrap();
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .write_stdin("Posted from stdin")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body-file",
+            body_path.to_str().unwrap(),
+            "--body-stdin",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "provide only one of --body, --body-file, or --body-stdin"
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[test]
+fn issue_comment_rejects_whitespace_only_flag_body() {
+    let server = MockServer::start();
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body",
+            "  \n\t  ",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "comment body cannot be empty"
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[test]
+fn issue_comment_rejects_whitespace_only_body_file() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let body_path = temp_dir.path().join("comment.txt");
+    std::fs::write(&body_path, " \n\t ").unwrap();
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body-file",
+            body_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "comment body cannot be empty"
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[test]
+fn issue_comment_rejects_whitespace_only_stdin_body() {
+    let server = MockServer::start();
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .write_stdin(" \n\t ")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body-stdin",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "comment body cannot be empty"
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[test]
+fn issue_comment_rejects_missing_body_file() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let missing_path = temp_dir.path().join("missing-comment.txt");
+
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I123/comments");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body-file",
+            missing_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .trim()
+            .starts_with("failed to read comment body file: ")
+    );
+
+    comment_mock.assert_hits(0);
+}
+
+#[test]
 fn issue_comment_fails_when_not_inside_a_git_repository() {
     let working_dir = TempDir::new().unwrap();
 
