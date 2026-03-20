@@ -50,6 +50,44 @@ fn repo_view_supports_explicit_repo_slug_in_json_output() {
 }
 
 #[test]
+fn repo_view_handles_private_repo_payload_without_clone_url() {
+    let server = MockServer::start();
+
+    let repo_mock = server.mock(|when, then| {
+        when.method(GET).path("/v5/repos/hzw-dev/tip-ucan");
+        then.status(200).json_body(serde_json::json!({
+            "full_name": "hzw-dev/tip-ucan",
+            "human_name": "hzw/tip-ucan",
+            "path": "tip-ucan",
+            "html_url": "https://gitee.com/hzw-dev/tip-ucan.git",
+            "ssh_url": "git@gitee.com:hzw-dev/tip-ucan.git",
+            "fork": false,
+            "default_branch": "main"
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee-cli")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .args(["repo", "view", "--repo", "hzw-dev/tip-ucan", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["full_name"], "hzw-dev/tip-ucan");
+    assert_eq!(body["owner"], "hzw-dev");
+    assert_eq!(body["name"], "tip-ucan");
+    assert_eq!(body["html_url"], "https://gitee.com/hzw-dev/tip-ucan");
+    assert_eq!(body["clone_url"], "https://gitee.com/hzw-dev/tip-ucan.git");
+    assert_eq!(body["ssh_url"], "git@gitee.com:hzw-dev/tip-ucan.git");
+
+    repo_mock.assert_hits(1);
+}
+
+#[test]
 fn repo_view_infers_repository_and_current_branch_from_https_origin() {
     let server = MockServer::start();
     let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/https");
@@ -127,6 +165,60 @@ fn repo_view_infers_repository_from_ssh_origin() {
     assert_eq!(body["current_branch"], "feature/ssh");
 
     repo_mock.assert_hits(1);
+}
+
+#[test]
+fn repo_view_resolves_human_name_remote_to_canonical_private_repo() {
+    let server = MockServer::start();
+    let repo_dir = git_repo_with_remote("git@gitee.com:hzw/tip-ucan.git", "feature/human-name");
+
+    let repo_lookup_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/hzw/tip-ucan")
+            .query_param("access_token", "secret-token");
+        then.status(404).json_body(serde_json::json!({
+            "message": "Not Found"
+        }));
+    });
+
+    let repo_list_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/user/repos")
+            .query_param("access_token", "secret-token");
+        then.status(200).json_body(serde_json::json!([
+            {
+                "full_name": "hzw-dev/tip-ucan",
+                "human_name": "hzw/tip-ucan",
+                "path": "tip-ucan",
+                "html_url": "https://gitee.com/hzw-dev/tip-ucan.git",
+                "ssh_url": "git@gitee.com:hzw-dev/tip-ucan.git",
+                "fork": false,
+                "default_branch": "main"
+            }
+        ]));
+    });
+
+    let output = Command::cargo_bin("gitee-cli")
+        .unwrap()
+        .current_dir(repo_dir.path())
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args(["repo", "view", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["source"], "local");
+    assert_eq!(body["owner"], "hzw-dev");
+    assert_eq!(body["name"], "tip-ucan");
+    assert_eq!(body["full_name"], "hzw-dev/tip-ucan");
+    assert_eq!(body["current_branch"], "feature/human-name");
+
+    repo_lookup_mock.assert_hits(1);
+    repo_list_mock.assert_hits(1);
 }
 
 #[test]

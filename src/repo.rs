@@ -27,6 +27,7 @@ impl RepoService {
                     name: slug.name,
                     source: "explicit",
                     current_branch: None,
+                    allow_human_name_fallback: false,
                 }
             }
             None => {
@@ -38,6 +39,7 @@ impl RepoService {
                     name: context.name,
                     source: "local",
                     current_branch: Some(context.current_branch),
+                    allow_human_name_fallback: true,
                 }
             }
         };
@@ -47,10 +49,24 @@ impl RepoService {
             .map_err(CommandError::config)?
             .map(|resolved| resolved.token);
 
-        let repository = self
-            .client
-            .fetch_repository(&resolved.owner, &resolved.name, token.as_deref())
-            .map_err(map_repo_error)?;
+        let repository =
+            match self
+                .client
+                .fetch_repository(&resolved.owner, &resolved.name, token.as_deref())
+            {
+                Ok(repository) => repository,
+                Err(RepoError::NotFound) if resolved.allow_human_name_fallback => {
+                    let Some(token) = token.as_deref() else {
+                        return Err(map_repo_error(RepoError::NotFound));
+                    };
+
+                    self.client
+                        .find_repository_by_human_name(&resolved.owner, &resolved.name, token)
+                        .map_err(map_repo_error)?
+                        .ok_or_else(|| map_repo_error(RepoError::NotFound))?
+                }
+                Err(error) => return Err(map_repo_error(error)),
+            };
 
         Ok(render_repo_view(
             request.output,
@@ -79,6 +95,7 @@ struct ResolvedRepoView {
     name: String,
     source: &'static str,
     current_branch: Option<String>,
+    allow_human_name_fallback: bool,
 }
 
 struct RepoSlug {
