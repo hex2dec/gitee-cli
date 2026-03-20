@@ -82,6 +82,456 @@ fn issue_list_uses_local_repo_context_and_reports_stable_json_output() {
 }
 
 #[test]
+fn issue_create_uses_local_repo_context_and_reports_stable_json_output() {
+    let server = MockServer::start();
+    let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/issues");
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .body_contains("access_token=secret-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Add+issue+create")
+            .body_contains("body=Creates+an+issue+from+the+CLI");
+        then.status(201).json_body(serde_json::json!({
+            "number": "I124",
+            "title": "Add issue create",
+            "state": "open",
+            "body": "Creates an issue from the CLI",
+            "comments": 0,
+            "html_url": "https://gitee.com/octo/demo/issues/I124",
+            "created_at": "2026-03-20T14:00:00Z",
+            "updated_at": "2026-03-20T14:00:00Z",
+            "user": {
+                "login": "alice"
+            }
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .current_dir(repo_dir.path())
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "create",
+            "--title",
+            "Add issue create",
+            "--body",
+            "Creates an issue from the CLI",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["source"], "local");
+    assert_eq!(body["owner"], "octo");
+    assert_eq!(body["name"], "demo");
+    assert_eq!(body["number"], "I124");
+    assert_eq!(body["title"], "Add issue create");
+    assert_eq!(body["state"], "open");
+    assert_eq!(body["author"], "alice");
+    assert_eq!(body["body"], "Creates an issue from the CLI");
+    assert_eq!(body["comments"], 0);
+    assert_eq!(body["html_url"], "https://gitee.com/octo/demo/issues/I124");
+    assert_eq!(body["created_at"], "2026-03-20T14:00:00Z");
+    assert_eq!(body["updated_at"], "2026-03-20T14:00:00Z");
+
+    create_mock.assert_hits(1);
+}
+
+#[test]
+fn issue_create_uses_explicit_repo_and_renders_text_output() {
+    let server = MockServer::start();
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .body_contains("access_token=secret-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Use+explicit+repo")
+            .body_contains("body=Created+with+an+explicit+repo");
+        then.status(201).json_body(serde_json::json!({
+            "number": "I125",
+            "title": "Use explicit repo",
+            "state": "open",
+            "body": "Created with an explicit repo",
+            "comments": 0,
+            "html_url": "https://gitee.com/octo/demo/issues/I125",
+            "created_at": "2026-03-20T14:30:00Z",
+            "updated_at": "2026-03-20T14:30:00Z",
+            "user": {
+                "login": "bob"
+            }
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "Use explicit repo",
+            "--body",
+            "Created with an explicit repo",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "\
+Created issue I125
+repository: octo/demo
+title: Use explicit repo
+state: open
+author: bob
+source: explicit
+url: https://gitee.com/octo/demo/issues/I125"
+    );
+
+    create_mock.assert_hits(1);
+}
+
+#[test]
+fn issue_create_reads_body_from_a_file() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let body_file = temp_dir.path().join("body.md");
+    std::fs::write(&body_file, "Generated from a file").unwrap();
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .body_contains("access_token=secret-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Read+issue+body+file")
+            .body_contains("body=Generated+from+a+file");
+        then.status(201).json_body(serde_json::json!({
+            "number": "I126",
+            "title": "Read issue body file",
+            "state": "open",
+            "body": "Generated from a file",
+            "comments": 0,
+            "html_url": "https://gitee.com/octo/demo/issues/I126",
+            "created_at": "2026-03-20T15:00:00Z",
+            "updated_at": "2026-03-20T15:00:00Z",
+            "user": {
+                "login": "carol"
+            }
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "Read issue body file",
+            "--body-file",
+            body_file.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["number"], "I126");
+    assert_eq!(body["body"], "Generated from a file");
+
+    create_mock.assert_hits(1);
+}
+
+#[test]
+fn issue_create_reads_body_from_stdin_via_body_file_dash() {
+    let server = MockServer::start();
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .body_contains("access_token=secret-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Read+issue+stdin")
+            .body_contains("body=Generated+from+stdin%0A");
+        then.status(201).json_body(serde_json::json!({
+            "number": "I127",
+            "title": "Read issue stdin",
+            "state": "open",
+            "body": "Generated from stdin\n",
+            "comments": 0,
+            "html_url": "https://gitee.com/octo/demo/issues/I127",
+            "created_at": "2026-03-20T15:30:00Z",
+            "updated_at": "2026-03-20T15:30:00Z",
+            "user": {
+                "login": "dora"
+            }
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "Read issue stdin",
+            "--body-file",
+            "-",
+            "--json",
+        ])
+        .write_stdin("Generated from stdin\n")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["number"], "I127");
+    assert_eq!(body["body"], "Generated from stdin\n");
+
+    create_mock.assert_hits(1);
+}
+
+#[test]
+fn issue_create_surfaces_remote_validation_errors_instead_of_auth_failure() {
+    let server = MockServer::start();
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .body_contains("access_token=secret-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Bad");
+        then.status(400).json_body(serde_json::json!({
+            "message": "title is too short"
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args(["issue", "create", "--repo", "octo/demo", "--title", "Bad"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(5));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "remote request failed (400): title is too short"
+    );
+
+    create_mock.assert_hits(1);
+}
+
+#[test]
+fn issue_create_requires_authentication() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env_remove("GITEE_TOKEN")
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "No auth",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(3));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "authentication required for issue create"
+    );
+}
+
+#[test]
+fn issue_create_fails_when_authentication_is_rejected() {
+    let server = MockServer::start();
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .body_contains("access_token=bad-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Needs+auth");
+        then.status(401).json_body(serde_json::json!({
+            "message": "Unauthorized"
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "bad-token")
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "Needs auth",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(3));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "authentication failed"
+    );
+
+    create_mock.assert_hits(1);
+}
+
+#[test]
+fn issue_create_fails_when_repository_is_missing() {
+    let server = MockServer::start();
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .body_contains("access_token=secret-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Missing+repo");
+        then.status(404).json_body(serde_json::json!({
+            "message": "Not Found"
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "Missing repo",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(6));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "repository not found"
+    );
+
+    create_mock.assert_hits(1);
+}
+
+#[test]
+fn issue_create_rejects_missing_title() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["issue", "create", "--repo", "octo/demo"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "issue create requires --title"
+    );
+}
+
+#[test]
+fn issue_create_rejects_body_and_body_file_together() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let body_file = temp_dir.path().join("body.md");
+    std::fs::write(&body_file, "Generated from a file").unwrap();
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST).path("/v5/repos/octo/issues");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "Conflict body inputs",
+            "--body",
+            "Generated from a flag",
+            "--body-file",
+            body_file.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "provide only one of --body or --body-file"
+    );
+
+    create_mock.assert_hits(0);
+}
+
+#[test]
+fn issue_create_fails_when_not_inside_a_git_repository() {
+    let working_dir = TempDir::new().unwrap();
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .current_dir(working_dir.path())
+        .env("GITEE_TOKEN", "secret-token")
+        .args(["issue", "create", "--title", "hello from local repo"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(7));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "git context error: not inside a git repository"
+    );
+}
+
+#[test]
 fn issue_comment_posts_a_reply_from_a_direct_body_flag() {
     let server = MockServer::start();
 

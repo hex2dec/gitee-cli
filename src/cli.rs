@@ -6,8 +6,8 @@ use crate::auth::{AuthService, LoginRequest, LoginTokenSource};
 use crate::command::{CommandError, CommandOutcome, EXIT_OK, OutputFormat};
 use crate::gitee_api::PullRequestListFilters;
 use crate::issue::{
-    IssueCommentBodySource, IssueCommentRequest, IssueListRequest, IssueService, IssueStateFilter,
-    IssueViewRequest,
+    IssueBodySource, IssueCommentRequest, IssueCreateRequest, IssueListRequest, IssueService,
+    IssueStateFilter, IssueViewRequest,
 };
 use crate::pr::{
     PrCheckoutRequest, PrCommentRequest, PrCreateRequest, PrListRequest, PrService,
@@ -73,6 +73,9 @@ fn run_issue(args: &[String]) -> Result<CommandOutcome, CommandError> {
     let issue = IssueService::from_env();
 
     match subcommand.as_str() {
+        "create" => execute_parsed(parse_issue_create_args(rest), |request| {
+            issue.create(request)
+        }),
         "comment" => execute_parsed(parse_issue_comment_args(rest), |request| {
             issue.comment(request)
         }),
@@ -265,11 +268,11 @@ fn parse_issue_comment_args(
 
         let Some(body) = body_values
             .last()
-            .map(|value| IssueCommentBodySource::Flag(value.clone()))
+            .map(|value| IssueBodySource::Inline(value.clone()))
             .or_else(|| {
                 body_file_values
                     .last()
-                    .map(|value| IssueCommentBodySource::File(PathBuf::from(value)))
+                    .map(|value| IssueBodySource::File(PathBuf::from(value)))
             })
         else {
             return Err(CommandError::usage(
@@ -281,6 +284,44 @@ fn parse_issue_comment_args(
             output,
             repo,
             number: number.clone(),
+            body,
+        })
+    })
+}
+
+fn parse_issue_create_args(
+    args: &[String],
+) -> Result<ParseOutcome<IssueCreateRequest>, CommandError> {
+    map_parsed(parse_matches(issue_create_command(), args), |matches| {
+        let output = output_format(&matches);
+        let repo = last_value(&matches, "repo");
+        let title = last_value(&matches, "title");
+        let body_values = values(&matches, "body");
+        let body_file_values = values(&matches, "body_file");
+
+        if body_values.len() + body_file_values.len() > 1 {
+            return Err(CommandError::usage(
+                "provide only one of --body or --body-file",
+            ));
+        }
+
+        let Some(title) = title else {
+            return Err(CommandError::usage("issue create requires --title"));
+        };
+
+        let body = body_values
+            .last()
+            .map(|value| IssueBodySource::Inline(value.clone()))
+            .or_else(|| {
+                body_file_values
+                    .last()
+                    .map(|value| IssueBodySource::File(PathBuf::from(value)))
+            });
+
+        Ok(IssueCreateRequest {
+            output,
+            repo,
+            title,
             body,
         })
     })
@@ -661,6 +702,7 @@ fn auth_help_command() -> Command {
 
 fn issue_help_command() -> Command {
     base_command("issue")
+        .subcommand(issue_create_command())
         .subcommand(issue_comment_command())
         .subcommand(issue_list_command())
         .subcommand(issue_view_command())
@@ -724,6 +766,15 @@ fn issue_comment_command() -> Command {
         .arg(string_option("body", "body", "BODY"))
         .arg(string_option("body_file", "body-file", "PATH"))
         .arg(positionals_arg())
+}
+
+fn issue_create_command() -> Command {
+    base_command("create")
+        .arg(json_flag())
+        .arg(string_option("repo", "repo", "REPO"))
+        .arg(string_option("title", "title", "TITLE"))
+        .arg(string_option("body", "body", "BODY"))
+        .arg(string_option("body_file", "body-file", "PATH"))
 }
 
 fn pr_view_command() -> Command {
