@@ -7,6 +7,7 @@ use tempfile::TempDir;
 #[test]
 fn auth_login_accepts_equals_syntax_for_long_options() {
     let config_dir = TempDir::new().unwrap();
+    let credential_store_dir = TempDir::new().unwrap();
     let server = MockServer::start();
 
     let user_mock = server.mock(|when, then| {
@@ -21,6 +22,10 @@ fn auth_login_accepts_equals_syntax_for_long_options() {
     let output = Command::cargo_bin("gitee")
         .unwrap()
         .env("GITEE_CONFIG_DIR", config_dir.path())
+        .env(
+            "GITEE_TEST_CREDENTIAL_STORE_DIR",
+            credential_store_dir.path(),
+        )
         .env("GITEE_BASE_URL", server.base_url())
         .env_remove("GITEE_TOKEN")
         .args(["auth", "login", "--token=inline-token", "--json"])
@@ -32,7 +37,7 @@ fn auth_login_accepts_equals_syntax_for_long_options() {
 
     let body: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(body["authenticated"], true);
-    assert_eq!(body["source"], "config");
+    assert_eq!(body["source"], "keyring");
     assert_eq!(body["username"], "inline-user");
 
     user_mock.assert_hits(1);

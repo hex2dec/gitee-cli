@@ -101,10 +101,15 @@ fn pr_status_summarizes_current_branch_and_current_user_in_json_output() {
 #[test]
 fn pr_status_requires_authentication() {
     let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/status");
+    let credential_store_dir = tempfile::TempDir::new().unwrap();
 
     let output = Command::cargo_bin("gitee")
         .unwrap()
         .current_dir(repo_dir.path())
+        .env(
+            "GITEE_TEST_CREDENTIAL_STORE_DIR",
+            credential_store_dir.path(),
+        )
         .env_remove("GITEE_TOKEN")
         .args(["pr", "status", "--json"])
         .output()

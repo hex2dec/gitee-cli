@@ -1,11 +1,15 @@
 use std::env;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use keyring::{Entry, Error as KeyringError};
 
 const CONFIG_DIR_NAME: &str = "gitee";
 const FALLBACK_CONFIG_DIR_NAME: &str = ".gitee";
+const KEYRING_SERVICE_NAME: &str = "gitee-cli:gitee.com";
+const KEYRING_ACCOUNT_NAME: &str = "default";
+const TEST_CREDENTIAL_STORE_DIR_ENV: &str = "GITEE_TEST_CREDENTIAL_STORE_DIR";
 
 pub struct ConfigStore {
     config_dir: PathBuf,
@@ -29,51 +33,129 @@ impl ConfigStore {
             }
         }
 
-        let config = self.load_config()?;
-        Ok(config.map(|config| ResolvedToken {
-            token: config.token,
-            source: TokenSource::Config,
+        Ok(self.load_saved_token()?.map(|token| ResolvedToken {
+            token,
+            source: TokenSource::Keyring,
         }))
     }
 
-    pub fn save_token(&self, token: &str) -> Result<(), ConfigError> {
-        fs::create_dir_all(&self.config_dir).map_err(ConfigError::Io)?;
+    pub fn save_token(&self, token: &str) -> Result<TokenSource, ConfigError> {
+        if let Some(path) = self.credential_path() {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).map_err(ConfigError::Io)?;
+            }
+            fs::write(path, token).map_err(ConfigError::Io)?;
+            return Ok(TokenSource::Keyring);
+        }
 
-        let contents = toml::to_string(&ConfigFile {
-            token: token.to_string(),
-        })
-        .map_err(ConfigError::TomlSerialize)?;
-
-        fs::write(self.config_path_buf(), contents).map_err(ConfigError::Io)
+        native_entry()?
+            .set_password(token)
+            .map_err(ConfigError::Keyring)?;
+        Ok(TokenSource::Keyring)
     }
 
     pub fn clear_token(&self) -> Result<(), ConfigError> {
-        let path = self.config_path_buf();
-        if !path.exists() {
-            return Ok(());
+        if let Some(path) = self.credential_path() {
+            return match fs::remove_file(path) {
+                Ok(()) => Ok(()),
+                Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+                Err(err) => Err(ConfigError::Io(err)),
+            };
         }
 
-        fs::remove_file(path).map_err(ConfigError::Io)
+        match native_entry()?.delete_credential() {
+            Ok(()) => Ok(()),
+            Err(KeyringError::NoEntry) => Ok(()),
+            Err(err) => Err(ConfigError::Keyring(err)),
+        }
     }
 
     pub fn config_path(&self) -> String {
         self.config_path_buf().display().to_string()
     }
 
-    fn load_config(&self) -> Result<Option<ConfigFile>, ConfigError> {
-        let path = self.config_path_buf();
-        if !path.exists() {
-            return Ok(None);
+    fn load_saved_token(&self) -> Result<Option<String>, ConfigError> {
+        if let Some(path) = self.credential_path() {
+            return match fs::read_to_string(path) {
+                Ok(token) => Ok(Some(token.trim().to_string())),
+                Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
+                Err(err) => Err(ConfigError::Io(err)),
+            };
         }
 
-        let contents = fs::read_to_string(path).map_err(ConfigError::Io)?;
-        let config = toml::from_str::<ConfigFile>(&contents).map_err(ConfigError::Toml)?;
-        Ok(Some(config))
+        match native_entry()?.get_password() {
+            Ok(token) => Ok(Some(token)),
+            Err(KeyringError::NoEntry) => Ok(None),
+            Err(err) => Err(ConfigError::Keyring(err)),
+        }
     }
 
     fn config_path_buf(&self) -> PathBuf {
         self.config_dir.join("config.toml")
     }
+
+    fn credential_path(&self) -> Option<PathBuf> {
+        explicit_test_credential_store_dir()
+            .or_else(synthetic_test_credential_store_dir)
+            .map(|path| path.join("credentials.token"))
+    }
+}
+
+fn explicit_test_credential_store_dir() -> Option<PathBuf> {
+    env::var(TEST_CREDENTIAL_STORE_DIR_ENV)
+        .ok()
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+}
+
+fn synthetic_test_credential_store_dir() -> Option<PathBuf> {
+    if !running_under_test_harness() {
+        return None;
+    }
+
+    if let Ok(path) = env::var("GITEE_CONFIG_DIR") {
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path).join(".gitee-test-store"));
+        }
+    }
+
+    if let Ok(path) = env::var("GITEE_BASE_URL") {
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(
+                env::temp_dir()
+                    .join("gitee-cli-test-store")
+                    .join(sanitize_path_component(path)),
+            );
+        }
+    }
+
+    if let Some(home_dir) = home_dir() {
+        return Some(home_dir.join(".gitee-test-store"));
+    }
+
+    env::current_dir()
+        .ok()
+        .map(|path| path.join(".gitee-test-store"))
+}
+
+fn running_under_test_harness() -> bool {
+    env::var_os("CARGO_BIN_EXE_gitee").is_some() || env::var_os("CARGO_TARGET_TMPDIR").is_some()
+}
+
+fn sanitize_path_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 pub struct ResolvedToken {
@@ -83,37 +165,34 @@ pub struct ResolvedToken {
 
 pub enum TokenSource {
     Env,
-    Config,
+    Keyring,
 }
 
 impl TokenSource {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Env => "env",
-            Self::Config => "config",
+            Self::Keyring => "keyring",
         }
     }
 }
 
-#[derive(Deserialize, Serialize)]
-struct ConfigFile {
-    token: String,
-}
-
 pub enum ConfigError {
     Io(std::io::Error),
-    Toml(toml::de::Error),
-    TomlSerialize(toml::ser::Error),
+    Keyring(KeyringError),
 }
 
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Io(err) => write!(f, "{err}"),
-            Self::Toml(err) => write!(f, "{err}"),
-            Self::TomlSerialize(err) => write!(f, "{err}"),
+            Self::Keyring(err) => write!(f, "{err}"),
         }
     }
+}
+
+fn native_entry() -> Result<Entry, ConfigError> {
+    Entry::new(KEYRING_SERVICE_NAME, KEYRING_ACCOUNT_NAME).map_err(ConfigError::Keyring)
 }
 
 fn config_dir() -> PathBuf {
