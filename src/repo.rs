@@ -203,7 +203,7 @@ impl CloneTransport {
         }
     }
 
-    fn select_url<'a>(self, repository: &'a Repository) -> &'a str {
+    fn select_url(self, repository: &Repository) -> &str {
         match self {
             Self::Https => &repository.clone_url,
             Self::Ssh => &repository.ssh_url,
