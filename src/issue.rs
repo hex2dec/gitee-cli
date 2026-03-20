@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
@@ -174,7 +175,6 @@ pub struct IssueCommentRequest {
 pub enum IssueCommentBodySource {
     Flag(String),
     File(PathBuf),
-    Stdin,
 }
 
 #[derive(Clone, Copy)]
@@ -451,15 +451,18 @@ fn resolve_issue_repo(repo: Option<&str>) -> Result<ResolvedIssueRepo, CommandEr
 fn read_comment_body(source: IssueCommentBodySource) -> Result<String, CommandError> {
     let body = match source {
         IssueCommentBodySource::Flag(body) => body,
-        IssueCommentBodySource::File(path) => fs::read_to_string(path).map_err(|err| {
-            CommandError::usage(format!("failed to read comment body file: {err}"))
-        })?,
-        IssueCommentBodySource::Stdin => {
-            let mut input = String::new();
-            io::stdin().read_to_string(&mut input).map_err(|err| {
-                CommandError::usage(format!("failed to read comment body from stdin: {err}"))
-            })?;
-            input
+        IssueCommentBodySource::File(path) => {
+            if path.as_os_str() == OsStr::new("-") {
+                let mut input = String::new();
+                io::stdin().read_to_string(&mut input).map_err(|err| {
+                    CommandError::usage(format!("failed to read comment body from stdin: {err}"))
+                })?;
+                input
+            } else {
+                fs::read_to_string(path).map_err(|err| {
+                    CommandError::usage(format!("failed to read comment body file: {err}"))
+                })?
+            }
         }
     };
 

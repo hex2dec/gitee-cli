@@ -193,7 +193,7 @@ Posted from file"
 }
 
 #[test]
-fn issue_comment_supports_stdin_body_input() {
+fn issue_comment_supports_stdin_body_input_via_body_file_dash() {
     let server = MockServer::start();
 
     let comment_mock = server.mock(|when, then| {
@@ -223,7 +223,8 @@ fn issue_comment_supports_stdin_body_input() {
             "I123",
             "--repo",
             "octo/demo",
-            "--body-stdin",
+            "--body-file",
+            "-",
             "--json",
         ])
         .output()
@@ -333,7 +334,7 @@ fn issue_comment_rejects_missing_body_input() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         String::from_utf8_lossy(&output.stderr).trim(),
-        "issue comment requires one of --body, --body-file, or --body-stdin"
+        "issue comment requires --body or --body-file"
     );
 }
 
@@ -372,26 +373,16 @@ fn issue_comment_rejects_body_and_body_file_together() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         String::from_utf8_lossy(&output.stderr).trim(),
-        "provide only one of --body, --body-file, or --body-stdin"
+        "provide only one of --body or --body-file"
     );
 
     comment_mock.assert_hits(0);
 }
 
 #[test]
-fn issue_comment_rejects_body_and_body_stdin_together() {
-    let server = MockServer::start();
-
-    let comment_mock = server.mock(|when, then| {
-        when.method(POST)
-            .path("/v5/repos/octo/demo/issues/I123/comments");
-        then.status(201);
-    });
-
+fn issue_comment_rejects_removed_body_stdin_flag_as_unsupported() {
     let output = Command::cargo_bin("gitee")
         .unwrap()
-        .env("GITEE_BASE_URL", server.base_url())
-        .env("GITEE_TOKEN", "secret-token")
         .write_stdin("Posted from stdin")
         .args([
             "issue",
@@ -399,8 +390,6 @@ fn issue_comment_rejects_body_and_body_stdin_together() {
             "I123",
             "--repo",
             "octo/demo",
-            "--body",
-            "Posted from flag",
             "--body-stdin",
         ])
         .output()
@@ -410,51 +399,8 @@ fn issue_comment_rejects_body_and_body_stdin_together() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         String::from_utf8_lossy(&output.stderr).trim(),
-        "provide only one of --body, --body-file, or --body-stdin"
+        "unsupported command"
     );
-
-    comment_mock.assert_hits(0);
-}
-
-#[test]
-fn issue_comment_rejects_body_file_and_body_stdin_together() {
-    let server = MockServer::start();
-    let temp_dir = TempDir::new().unwrap();
-    let body_path = temp_dir.path().join("comment.txt");
-    std::fs::write(&body_path, "Posted from file").unwrap();
-
-    let comment_mock = server.mock(|when, then| {
-        when.method(POST)
-            .path("/v5/repos/octo/demo/issues/I123/comments");
-        then.status(201);
-    });
-
-    let output = Command::cargo_bin("gitee")
-        .unwrap()
-        .env("GITEE_BASE_URL", server.base_url())
-        .env("GITEE_TOKEN", "secret-token")
-        .write_stdin("Posted from stdin")
-        .args([
-            "issue",
-            "comment",
-            "I123",
-            "--repo",
-            "octo/demo",
-            "--body-file",
-            body_path.to_str().unwrap(),
-            "--body-stdin",
-        ])
-        .output()
-        .unwrap();
-
-    assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr).trim(),
-        "provide only one of --body, --body-file, or --body-stdin"
-    );
-
-    comment_mock.assert_hits(0);
 }
 
 #[test]
@@ -533,7 +479,7 @@ fn issue_comment_rejects_whitespace_only_body_file() {
 }
 
 #[test]
-fn issue_comment_rejects_whitespace_only_stdin_body() {
+fn issue_comment_rejects_whitespace_only_stdin_body_via_body_file_dash() {
     let server = MockServer::start();
 
     let comment_mock = server.mock(|when, then| {
@@ -553,7 +499,8 @@ fn issue_comment_rejects_whitespace_only_stdin_body() {
             "I123",
             "--repo",
             "octo/demo",
-            "--body-stdin",
+            "--body-file",
+            "-",
         ])
         .output()
         .unwrap();

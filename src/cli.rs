@@ -308,7 +308,7 @@ fn parse_issue_comment_args(args: &[String]) -> Result<IssueCommentRequest, Comm
                 };
                 if body.is_some() {
                     return Err(CommandError::usage(
-                        "provide only one of --body, --body-file, or --body-stdin",
+                        "provide only one of --body or --body-file",
                     ));
                 }
                 body = Some(IssueCommentBodySource::Flag(value.clone()));
@@ -320,20 +320,11 @@ fn parse_issue_comment_args(args: &[String]) -> Result<IssueCommentRequest, Comm
                 };
                 if body.is_some() {
                     return Err(CommandError::usage(
-                        "provide only one of --body, --body-file, or --body-stdin",
+                        "provide only one of --body or --body-file",
                     ));
                 }
                 body = Some(IssueCommentBodySource::File(PathBuf::from(value)));
                 index += 2;
-            }
-            "--body-stdin" => {
-                if body.is_some() {
-                    return Err(CommandError::usage(
-                        "provide only one of --body, --body-file, or --body-stdin",
-                    ));
-                }
-                body = Some(IssueCommentBodySource::Stdin);
-                index += 1;
             }
             value if value.starts_with("--") => {
                 return Err(CommandError::usage("unsupported command"));
@@ -359,7 +350,7 @@ fn parse_issue_comment_args(args: &[String]) -> Result<IssueCommentRequest, Comm
 
     let Some(body) = body else {
         return Err(CommandError::usage(
-            "issue comment requires one of --body, --body-file, or --body-stdin",
+            "issue comment requires --body or --body-file",
         ));
     };
 
