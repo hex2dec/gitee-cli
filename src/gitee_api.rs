@@ -264,6 +264,44 @@ impl GiteeClient {
         Err(IssueError::UnexpectedStatus(response.status().as_u16()))
     }
 
+    pub fn create_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: &str,
+        token: &str,
+        body: &str,
+    ) -> Result<IssueComment, IssueError> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/v5/repos/{owner}/{repo}/issues/{number}/comments",
+                self.base_url
+            ))
+            .query(&[("access_token", token)])
+            .form(&[("body", body)])
+            .send()
+            .map_err(IssueError::Transport)?;
+
+        if response.status().is_success() {
+            let comment = response
+                .json::<IssueCommentResponse>()
+                .map_err(IssueError::Transport)?
+                .into_issue_comment();
+            return Ok(comment);
+        }
+
+        if matches!(response.status().as_u16(), 400 | 401) {
+            return Err(IssueError::InvalidToken);
+        }
+
+        if response.status().as_u16() == 404 {
+            return Err(IssueError::NotFound);
+        }
+
+        Err(IssueError::UnexpectedStatus(response.status().as_u16()))
+    }
+
     pub fn fetch_pull_request(
         &self,
         owner: &str,
