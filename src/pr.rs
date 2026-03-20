@@ -132,6 +132,48 @@ impl PrService {
         Ok(render_pr_create(request.output, pull_request))
     }
 
+    pub fn checkout(&self, request: PrCheckoutRequest) -> Result<CommandOutcome, CommandError> {
+        ensure_git_repository_for_checkout()?;
+        ensure_origin_remote_for_checkout()?;
+
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .map(|resolved| resolved.token);
+        let repo = match request.repo.as_deref() {
+            Some(repo) => resolve_repo(Some(repo))?,
+            None => resolve_repo(None)?,
+        };
+        let pull_request =
+            self.fetch_pull_request_with_fallback(&repo, request.number, token.as_deref())?;
+
+        if pull_request.head.repository != pull_request.repository {
+            return Err(CommandError::git(
+                "git checkout error: pull request head repository is not supported",
+            ));
+        }
+
+        fetch_branch_from_origin(&pull_request.head.r#ref)?;
+        let created = !local_branch_exists(&pull_request.head.r#ref)?;
+        checkout_branch(&pull_request.head.r#ref, created)?;
+        set_branch_upstream(&pull_request.head.r#ref)?;
+        let current_branch = git_current_branch()?;
+
+        Ok(render_pr_checkout(
+            request.output,
+            PrCheckoutResult {
+                repository: pull_request.repository,
+                number: request.number,
+                branch: pull_request.head.r#ref,
+                head_sha: pull_request.head.sha,
+                head_repository: pull_request.head.repository,
+                created,
+                current_branch,
+            },
+        ))
+    }
+
     pub fn status(&self, request: PrStatusRequest) -> Result<CommandOutcome, CommandError> {
         let token = self
             .config
@@ -363,6 +405,22 @@ pub struct PrStatusRequest {
     pub filters: PullRequestListFilters,
 }
 
+pub struct PrCheckoutRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub number: u64,
+}
+
+struct PrCheckoutResult {
+    repository: String,
+    number: u64,
+    branch: String,
+    head_sha: String,
+    head_repository: String,
+    created: bool,
+    current_branch: String,
+}
+
 pub enum PrTextSource {
     Inline(String),
     File(String),
@@ -526,6 +584,36 @@ fn render_pr_create(output: OutputFormat, pull_request: PullRequest) -> CommandO
     }
 }
 
+fn render_pr_checkout(output: OutputFormat, checkout: PrCheckoutResult) -> CommandOutcome {
+    match output {
+        OutputFormat::Json => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "repository": checkout.repository,
+                "pull_request": checkout.number,
+                "branch": checkout.branch,
+                "current_branch": checkout.current_branch,
+                "head_sha": checkout.head_sha,
+                "head_repository": checkout.head_repository,
+                "created": checkout.created,
+            }),
+        ),
+        OutputFormat::Text => CommandOutcome::text(
+            EXIT_OK,
+            format!(
+                "Checked out {} for pull request #{} ({})",
+                checkout.branch,
+                checkout.number,
+                if checkout.created {
+                    "created"
+                } else {
+                    "existing"
+                }
+            ),
+        ),
+    }
+}
+
 fn render_pr_list(
     output: OutputFormat,
     repo: &ResolvedRepo,
@@ -624,6 +712,129 @@ fn render_optional_bool(value: Option<bool>) -> &'static str {
         Some(false) => "false",
         None => "unknown",
     }
+}
+
+fn ensure_git_repository_for_checkout() -> Result<(), CommandError> {
+    let output = ProcessCommand::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
+
+    if output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == "true" {
+        return Ok(());
+    }
+
+    Err(CommandError::git(
+        "git context error: not inside a git repository",
+    ))
+}
+
+fn ensure_origin_remote_for_checkout() -> Result<(), CommandError> {
+    let output = ProcessCommand::new("git")
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(CommandError::git(
+        "git context error: missing origin remote",
+    ))
+}
+
+fn fetch_branch_from_origin(branch: &str) -> Result<(), CommandError> {
+    let remote_ref = format!("refs/remotes/origin/{branch}");
+    let fetch_ref = format!("refs/heads/{branch}:{remote_ref}");
+    let output = ProcessCommand::new("git")
+        .args(["fetch", "origin", &fetch_ref])
+        .output()
+        .map_err(|err| CommandError::git(format!("git fetch failed: {err}")))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(CommandError::git(format!(
+        "git fetch failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    )))
+}
+
+fn local_branch_exists(branch: &str) -> Result<bool, CommandError> {
+    let reference = format!("refs/heads/{branch}");
+    let output = ProcessCommand::new("git")
+        .args(["show-ref", "--verify", "--quiet", &reference])
+        .output()
+        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
+
+    if output.status.success() {
+        return Ok(true);
+    }
+
+    if output.status.code() == Some(1) {
+        return Ok(false);
+    }
+
+    Err(CommandError::git(format!(
+        "git context error: failed to inspect local branch `{branch}`"
+    )))
+}
+
+fn checkout_branch(branch: &str, created: bool) -> Result<(), CommandError> {
+    let output = if created {
+        let tracking_branch = format!("origin/{branch}");
+        ProcessCommand::new("git")
+            .args(["checkout", "-b", branch, "--track", &tracking_branch])
+            .output()
+    } else {
+        ProcessCommand::new("git")
+            .args(["checkout", branch])
+            .output()
+    }
+    .map_err(|err| CommandError::git(format!("git checkout failed: {err}")))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(CommandError::git(format!(
+        "git checkout failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    )))
+}
+
+fn set_branch_upstream(branch: &str) -> Result<(), CommandError> {
+    let tracking_branch = format!("origin/{branch}");
+    let output = ProcessCommand::new("git")
+        .args(["branch", "--set-upstream-to", &tracking_branch, branch])
+        .output()
+        .map_err(|err| CommandError::git(format!("git checkout failed: {err}")))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(CommandError::git(format!(
+        "git checkout failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    )))
+}
+
+fn git_current_branch() -> Result<String, CommandError> {
+    let output = ProcessCommand::new("git")
+        .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .output()
+        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
+
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+
+    Err(CommandError::git(
+        "git context error: failed to resolve current branch",
+    ))
 }
 
 fn read_required_body(body: PrTextSource) -> Result<String, CommandError> {
