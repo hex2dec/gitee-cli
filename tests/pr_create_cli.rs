@@ -257,6 +257,57 @@ fn pr_create_reads_body_from_stdin_via_body_file_dash() {
 }
 
 #[test]
+fn pr_create_rejects_body_and_body_file_together() {
+    let server = MockServer::start();
+    let temp_dir = TempDir::new().unwrap();
+    let body_file = temp_dir.path().join("body.md");
+    std::fs::write(&body_file, "Generated from a file").unwrap();
+
+    let repo_mock = server.mock(|when, then| {
+        when.method(GET).path("/v5/repos/octo/demo");
+        then.status(200);
+    });
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST).path("/v5/repos/octo/demo/pulls");
+        then.status(201);
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "pr",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--head",
+            "feature/body-file",
+            "--base",
+            "main",
+            "--title",
+            "Read body file",
+            "--body",
+            "Generated from a flag",
+            "--body-file",
+            body_file.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "provide only one of --body or --body-file"
+    );
+
+    repo_mock.assert_hits(0);
+    create_mock.assert_hits(0);
+}
+
+#[test]
 fn pr_create_requires_authentication() {
     let output = Command::cargo_bin("gitee")
         .unwrap()

@@ -158,6 +158,8 @@ Post a follow-up comment non-interactively:
 
 ```bash
 gitee issue comment I123 --repo octo/demo --body "Thanks for the report" --json
+gitee issue comment I123 --repo octo/demo --body-file ./comment.txt
+printf '%s' "Posted from stdin" | gitee issue comment I123 --repo octo/demo --body-file - --json
 ```
 
 ### Work with Pull Requests Without Leaving the Terminal
@@ -186,16 +188,19 @@ Create a pull request from the current branch:
 gitee pr create --title "Use local head" --base develop --body "Built from the local branch"
 ```
 
-Read a PR body from a file:
+Read a PR body from a file or stdin:
 
 ```bash
 gitee pr create --repo octo/demo --head feature/body-file --title "Read body file" --body-file ./body.md --json
+printf '%s\n' "Generated from stdin" | gitee pr create --repo octo/demo --head feature/stdin --base main --title "Read stdin" --body-file - --json
 ```
 
-Comment on a pull request:
+Comment on a pull request from a flag, file, or stdin:
 
 ```bash
 gitee pr comment 42 --repo octo/demo --body "Ship it" --json
+gitee pr comment 42 --repo octo/demo --body-file ./review.md
+printf '%s\n' "Generated from stdin" | gitee pr comment 42 --repo octo/demo --body-file - --json
 ```
 
 Check out a pull request head branch into the current local repository:

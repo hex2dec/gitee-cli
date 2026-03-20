@@ -158,6 +158,8 @@ gitee issue view I123 --repo octo/demo --comments --page 1 --per-page 20 --json
 
 ```bash
 gitee issue comment I123 --repo octo/demo --body "Thanks for the report" --json
+gitee issue comment I123 --repo octo/demo --body-file ./comment.txt
+printf '%s' "Posted from stdin" | gitee issue comment I123 --repo octo/demo --body-file - --json
 ```
 
 ### 不离开终端处理 Pull Request
@@ -186,16 +188,19 @@ gitee pr status --state open --limit 10 --json
 gitee pr create --title "Use local head" --base develop --body "Built from the local branch"
 ```
 
-从文件读取 PR 描述：
+从文件或 stdin 读取 PR 描述：
 
 ```bash
 gitee pr create --repo octo/demo --head feature/body-file --title "Read body file" --body-file ./body.md --json
+printf '%s\n' "Generated from stdin" | gitee pr create --repo octo/demo --head feature/stdin --base main --title "Read stdin" --body-file - --json
 ```
 
-对 Pull Request 发表评论：
+通过参数、文件或 stdin 对 Pull Request 发表评论：
 
 ```bash
 gitee pr comment 42 --repo octo/demo --body "Ship it" --json
+gitee pr comment 42 --repo octo/demo --body-file ./review.md
+printf '%s\n' "Generated from stdin" | gitee pr comment 42 --repo octo/demo --body-file - --json
 ```
 
 将 Pull Request 的 head 分支检出到当前本地仓库：
