@@ -37,17 +37,25 @@ Do not assume every `gh` command exists. Confirm support with `gitee help` or
 - Prefer non-interactive write flows using flags, files, or stdin.
 - If a command fails, rerun `gitee help <topic>` before inventing flags or switching to raw HTTP.
 
-## Common workflows
+## Authentication
 
-Check auth:
+Treat authentication as a prerequisite check, not the main workflow:
 
 ```bash
 gitee auth status
-gitee auth login --token "$GITEE_TOKEN"
-printf '%s\n' "$TOKEN" | gitee auth login --with-token
 ```
 
-Inspect repositories:
+If authentication is missing, inspect the available auth commands with:
+
+```bash
+gitee help auth
+```
+
+Do not default to performing login flows unless the task requires it.
+
+## gitee repo
+
+Use `gitee repo` for repository inspection and clone workflows:
 
 ```bash
 gitee repo view --repo octo/demo
@@ -55,7 +63,12 @@ gitee repo view
 gitee repo clone octo/demo
 ```
 
-Read and write issues:
+Prefer explicit `--repo` in scripts. Omit it only when the current checkout
+should provide repo context.
+
+## gitee issue
+
+Use `gitee issue` for reading and writing issues:
 
 ```bash
 gitee issue list --repo octo/demo --state open
@@ -64,7 +77,12 @@ gitee issue create --repo octo/demo --title "New bug" --body-file ./issue.md
 gitee issue comment I123 --repo octo/demo --body "Thanks for the report"
 ```
 
-Work with pull requests:
+For create and comment commands, use one body source at a time: inline text or
+`--body-file`.
+
+## gitee pr
+
+Use `gitee pr` for pull request review and branch workflows:
 
 ```bash
 gitee pr list --repo octo/demo --state open --limit 10
@@ -75,10 +93,5 @@ gitee pr comment 42 --repo octo/demo --body "Ship it"
 gitee pr checkout 42 --repo octo/demo
 ```
 
-## Guardrails
-
-- `pr status` requires a local git checkout and authentication.
-- `pr checkout` requires a local git checkout with an `origin` remote.
-- Repo inference is convenient, but explicit `--repo` is safer for automation.
-- `auth login` accepts exactly one of `--token` or `--with-token`.
-- For create/comment commands, use one body source at a time: inline text or `--body-file`.
+`pr status` requires a local git checkout and authentication.
+`pr checkout` requires a local git checkout with an `origin` remote.
