@@ -10,7 +10,7 @@ use crate::issue::{
     IssueStateFilter, IssueViewRequest,
 };
 use crate::pr::{
-    PrCheckoutRequest, PrCommentRequest, PrCreateRequest, PrListRequest, PrService,
+    PrCheckoutRequest, PrCommentRequest, PrCreateRequest, PrEditRequest, PrListRequest, PrService,
     PrStatusRequest, PrTextSource, PrViewRequest,
 };
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
@@ -101,6 +101,7 @@ fn run_pr(args: &[String]) -> Result<CommandOutcome, CommandError> {
         "checkout" => execute_parsed(parse_pr_checkout_args(rest), |request| pr.checkout(request)),
         "comment" => execute_parsed(parse_pr_comment_args(rest), |request| pr.comment(request)),
         "create" => execute_parsed(parse_pr_create_args(rest), |request| pr.create(request)),
+        "edit" => execute_parsed(parse_pr_edit_args(rest), |request| pr.edit(request)),
         "list" => execute_parsed(parse_pr_list_args(rest), |request| pr.list(request)),
         "status" => execute_parsed(parse_pr_status_args(rest), |request| pr.status(request)),
         "view" => execute_parsed(parse_pr_view_args(rest), |request| pr.view(request)),
@@ -205,6 +206,10 @@ fn resolve_help_topic(path: &[String]) -> Option<HelpTopic> {
         ["pr", "create"] => Some(HelpTopic {
             text_command: pr_create_command,
             json: pr_create_help_json,
+        }),
+        ["pr", "edit"] => Some(HelpTopic {
+            text_command: pr_edit_command,
+            json: pr_edit_help_json,
         }),
         ["pr", "list"] => Some(HelpTopic {
             text_command: pr_list_command,
@@ -636,6 +641,83 @@ fn parse_pr_create_args(args: &[String]) -> Result<ParseOutcome<PrCreateRequest>
     })
 }
 
+fn parse_pr_edit_args(args: &[String]) -> Result<ParseOutcome<PrEditRequest>, CommandError> {
+    map_parsed(parse_matches(pr_edit_command(), args), |matches| {
+        let output = output_format(&matches);
+        let repo = last_value(&matches, "repo");
+        let title = last_value(&matches, "title");
+        let state = match last_value(&matches, "state") {
+            Some(value) => Some(parse_pr_edit_state(&value)?),
+            None => None,
+        };
+        let draft_count = flag_count(&matches, "draft");
+        let ready_count = flag_count(&matches, "ready");
+        let body_values = values(&matches, "body");
+        let body_file_values = values(&matches, "body_file");
+        let positionals = values(&matches, "positionals");
+
+        let Some(number) = positionals.first() else {
+            return Err(CommandError::usage(
+                "pr edit requires a pull request number",
+            ));
+        };
+
+        if positionals.len() > 1 {
+            return Err(CommandError::usage(
+                "pr edit accepts exactly one pull request number",
+            ));
+        }
+
+        if body_values.len() + body_file_values.len() > 1 {
+            return Err(CommandError::usage(
+                "provide only one of --body or --body-file",
+            ));
+        }
+
+        if draft_count + ready_count > 1 {
+            return Err(CommandError::usage(
+                "provide only one of --draft or --ready",
+            ));
+        }
+
+        let body = body_values
+            .last()
+            .map(|value| PrTextSource::Inline(value.clone()))
+            .or_else(|| {
+                body_file_values
+                    .last()
+                    .map(|value| PrTextSource::File(value.clone()))
+            });
+        let draft = if draft_count == 1 {
+            Some(true)
+        } else if ready_count == 1 {
+            Some(false)
+        } else {
+            None
+        };
+
+        if title.is_none() && body.is_none() && state.is_none() && draft.is_none() {
+            return Err(CommandError::usage(
+                "pr edit requires at least one of --title, --body, --body-file, --state, --draft, or --ready",
+            ));
+        }
+
+        let number = number.parse::<u64>().map_err(|_| {
+            CommandError::usage("invalid pull request number: expected a positive integer")
+        })?;
+
+        Ok(PrEditRequest {
+            output,
+            repo,
+            number,
+            title,
+            body,
+            state,
+            draft,
+        })
+    })
+}
+
 fn parse_pr_checkout_args(
     args: &[String],
 ) -> Result<ParseOutcome<PrCheckoutRequest>, CommandError> {
@@ -825,10 +907,11 @@ fn issue_help_command() -> Command {
 
 fn pr_help_command() -> Command {
     base_command("pr", "gitee pr")
-        .about("View, create, comment on, and check out pull requests")
+        .about("View, create, edit, comment on, and check out pull requests")
         .subcommand(pr_checkout_command())
         .subcommand(pr_comment_command())
         .subcommand(pr_create_command())
+        .subcommand(pr_edit_command())
         .subcommand(pr_list_command())
         .subcommand(pr_status_command())
         .subcommand(pr_view_command())
@@ -1097,6 +1180,48 @@ fn pr_create_command() -> Command {
             "PATH",
             "Read pull request body text from a file",
         ))
+}
+
+fn pr_edit_command() -> Command {
+    base_command("edit", "gitee pr edit")
+        .about("Edit an existing pull request")
+        .arg(json_flag())
+        .arg(repo_option())
+        .arg(string_option(
+            "title",
+            "title",
+            "TITLE",
+            "Replace the pull request title",
+        ))
+        .arg(string_option(
+            "body",
+            "body",
+            "BODY",
+            "Replace the pull request body text",
+        ))
+        .arg(string_option(
+            "body_file",
+            "body-file",
+            "PATH",
+            "Read the pull request body text from a file",
+        ))
+        .arg(string_option(
+            "state",
+            "state",
+            "STATE",
+            "Change pull request state: open or closed",
+        ))
+        .arg(count_flag(
+            "draft",
+            "draft",
+            "Mark the pull request as draft",
+        ))
+        .arg(count_flag(
+            "ready",
+            "ready",
+            "Mark the pull request as ready",
+        ))
+        .arg(positionals_arg("positionals", "PR", "Pull request number"))
 }
 
 fn pr_checkout_command() -> Command {
@@ -1510,12 +1635,13 @@ fn pr_help_json() -> serde_json::Value {
     help_group_json(
         "pr",
         "pr",
-        "View, create, comment on, and check out pull requests",
+        "View, create, edit, comment on, and check out pull requests",
         "gh pr",
         vec![
             pr_checkout_help_json(),
             pr_comment_help_json(),
             pr_create_help_json(),
+            pr_edit_help_json(),
             pr_list_help_json(),
             pr_status_help_json(),
             pr_view_help_json(),
@@ -1629,6 +1755,62 @@ fn pr_create_help_json() -> serde_json::Value {
         vec![
             "--title is required.",
             "Provide at most one of --body or --body-file.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_edit_help_json() -> serde_json::Value {
+    help_command_json(
+        "edit",
+        "pr edit",
+        "Edit an existing pull request",
+        "gh pr edit",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json(
+                "--title",
+                Some("TITLE"),
+                "Replace the pull request title",
+                false,
+            ),
+            help_option_json(
+                "--body",
+                Some("BODY"),
+                "Replace the pull request body text",
+                false,
+            ),
+            help_option_json(
+                "--body-file",
+                Some("PATH"),
+                "Read the pull request body text from a file",
+                false,
+            ),
+            help_option_json(
+                "--state",
+                Some("STATE"),
+                "Change pull request state: open or closed",
+                false,
+            ),
+            help_option_json("--draft", None, "Mark the pull request as draft", false),
+            help_option_json("--ready", None, "Mark the pull request as ready", false),
+        ],
+        vec![help_argument_json("pr", "PR", "Pull request number", true)],
+        vec!["--body", "--body-file"],
+        vec![
+            "gitee pr edit 42 --repo octo/demo --title \"Updated title\" --json",
+            "gitee pr edit 42 --body-file ./body.md --state open --ready --json",
+        ],
+        vec![
+            "Provide at least one of --title, --body, --body-file, --state, --draft, or --ready.",
+            "Provide at most one of --body or --body-file.",
+            "Provide at most one of --draft or --ready.",
             "When --repo is omitted, the command can infer the repository from local git context.",
         ],
     )
@@ -1937,6 +2119,15 @@ fn parse_pr_state(value: &str) -> Result<String, CommandError> {
         "open" | "closed" | "merged" | "all" => Ok(value.to_string()),
         _ => Err(CommandError::usage(
             "invalid value for --state: expected open, closed, merged, or all",
+        )),
+    }
+}
+
+fn parse_pr_edit_state(value: &str) -> Result<String, CommandError> {
+    match value {
+        "open" | "closed" => Ok(value.to_string()),
+        _ => Err(CommandError::usage(
+            "invalid value for --state: expected open or closed",
         )),
     }
 }

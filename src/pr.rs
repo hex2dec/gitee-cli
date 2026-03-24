@@ -8,7 +8,7 @@ use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputF
 use crate::config::ConfigStore;
 use crate::gitee_api::{
     CreatePullRequest, CreatePullRequestComment, GiteeClient, PullRequest, PullRequestComment,
-    PullRequestError, PullRequestListFilters, RepoError,
+    PullRequestError, PullRequestListFilters, RepoError, UpdatePullRequest,
 };
 use crate::repo_context::infer_repo_context;
 
@@ -130,6 +130,32 @@ impl PrService {
             .map_err(map_pull_request_error)?;
 
         Ok(render_pr_create(request.output, pull_request))
+    }
+
+    pub fn edit(&self, request: PrEditRequest) -> Result<CommandOutcome, CommandError> {
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: crate::command::EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for pr edit".to_string()),
+            })?
+            .token;
+
+        let repo = resolve_repo(request.repo.as_deref())?;
+        let body = read_optional_body(request.body)?;
+        let update = UpdatePullRequest {
+            title: request.title.as_deref(),
+            body: body.as_deref(),
+            state: request.state.as_deref(),
+            draft: request.draft,
+        };
+        let pull_request =
+            self.update_pull_request_with_fallback(&repo, request.number, &token, &update)?;
+
+        Ok(render_pr_view(request.output, pull_request))
     }
 
     pub fn checkout(&self, request: PrCheckoutRequest) -> Result<CommandOutcome, CommandError> {
@@ -326,6 +352,41 @@ impl PrService {
         }))
     }
 
+    fn update_pull_request_with_fallback(
+        &self,
+        repo: &ResolvedRepo,
+        number: u64,
+        token: &str,
+        request: &UpdatePullRequest<'_>,
+    ) -> Result<PullRequest, CommandError> {
+        match self
+            .client
+            .update_pull_request(&repo.owner, &repo.name, number, token, request)
+        {
+            Ok(pull_request) => Ok(pull_request),
+            Err(PullRequestError::NotFound) => {
+                if let Some(canonical_repo) = self.find_canonical_repo(repo, Some(token))? {
+                    match self.client.update_pull_request(
+                        &canonical_repo.owner,
+                        &canonical_repo.name,
+                        number,
+                        token,
+                        request,
+                    ) {
+                        Ok(pull_request) => Ok(pull_request),
+                        Err(PullRequestError::NotFound) => {
+                            Err(self.classify_missing_pull_request(&canonical_repo, Some(token)))
+                        }
+                        Err(error) => Err(map_pull_request_error(error)),
+                    }
+                } else {
+                    Err(self.classify_missing_pull_request(repo, Some(token)))
+                }
+            }
+            Err(error) => Err(map_pull_request_error(error)),
+        }
+    }
+
     fn classify_missing_pull_request(
         &self,
         repo: &ResolvedRepo,
@@ -383,6 +444,16 @@ pub struct PrCommentRequest {
     pub repo: Option<String>,
     pub number: u64,
     pub body: PrTextSource,
+}
+
+pub struct PrEditRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub number: u64,
+    pub title: Option<String>,
+    pub body: Option<PrTextSource>,
+    pub state: Option<String>,
+    pub draft: Option<bool>,
 }
 
 pub struct PrCreateRequest {

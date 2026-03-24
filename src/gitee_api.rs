@@ -25,6 +25,13 @@ pub struct CreatePullRequest<'a> {
     pub body: Option<&'a str>,
 }
 
+pub struct UpdatePullRequest<'a> {
+    pub title: Option<&'a str>,
+    pub body: Option<&'a str>,
+    pub state: Option<&'a str>,
+    pub draft: Option<bool>,
+}
+
 #[derive(Serialize)]
 struct CreatePullRequestPayload<'a> {
     access_token: &'a str,
@@ -518,6 +525,70 @@ impl GiteeClient {
                 base: request.base,
                 body: request.body,
             })
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            let pull_request = response
+                .json::<PullRequestResponse>()
+                .map_err(PullRequestError::Transport)?;
+            return Ok(pull_request.into_pull_request(owner, repo));
+        }
+
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if status == 401 {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if status == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
+    }
+
+    pub fn update_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        token: &str,
+        request: &UpdatePullRequest<'_>,
+    ) -> Result<PullRequest, PullRequestError> {
+        let mut form = vec![("access_token", token.to_string())];
+
+        if let Some(title) = request.title {
+            form.push(("title", title.to_string()));
+        }
+
+        if let Some(body) = request.body {
+            form.push(("body", body.to_string()));
+        }
+
+        if let Some(state) = request.state {
+            form.push(("state", state.to_string()));
+        }
+
+        if let Some(draft) = request.draft {
+            form.push(("draft", draft.to_string()));
+        }
+
+        let response = self
+            .client
+            .patch(format!(
+                "{}/v5/repos/{owner}/{repo}/pulls/{number}",
+                self.base_url
+            ))
+            .query(&[("access_token", token)])
+            .form(&form)
             .send()
             .map_err(PullRequestError::Transport)?;
 
