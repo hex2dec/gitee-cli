@@ -32,8 +32,8 @@ Do not assume every `gh` command exists. Confirm support with `gitee help` or
 ## Working rules
 
 - Prefer plain `gitee help` for human-facing discovery and troubleshooting.
-- Use explicit `--repo owner/repo` in scripts or when reproducibility matters.
-- Omit `--repo` only when the current local checkout should supply repo context.
+- Prefer the current local checkout as repo context when available.
+- Add explicit `--repo owner/repo` only when working outside a local checkout or when reproducibility matters.
 - Prefer non-interactive write flows using flags, files, or stdin.
 - If a command fails, rerun `gitee help <topic>` before inventing flags or switching to raw HTTP.
 
@@ -58,40 +58,40 @@ Do not default to performing login flows unless the task requires it.
 Use `gitee repo` for repository inspection and clone workflows:
 
 ```bash
-gitee repo view --repo octo/demo
 gitee repo view
 gitee repo clone octo/demo
 ```
 
-Prefer explicit `--repo` in scripts. Omit it only when the current checkout
-should provide repo context.
+When you are outside a local checkout, use `gitee repo view --repo owner/repo`.
 
 ## gitee issue
 
 Use `gitee issue` for reading and writing issues:
 
 ```bash
-gitee issue list --repo octo/demo --state open
-gitee issue view I123 --repo octo/demo --comments
-gitee issue create --repo octo/demo --title "New bug" --body-file ./issue.md
-gitee issue comment I123 --repo octo/demo --body "Thanks for the report"
+gitee issue list --state open
+gitee issue view I123 --comments
+gitee issue create --title "New bug" --body-file ./issue.md
+gitee issue comment I123 --body "Thanks for the report"
 ```
 
 For create and comment commands, use one body source at a time: inline text or
 `--body-file`.
+Add `--repo owner/repo` only when local repo context is unavailable.
 
 ## gitee pr
 
 Use `gitee pr` for pull request review and branch workflows:
 
 ```bash
-gitee pr list --repo octo/demo --state open --limit 10
-gitee pr view 42 --repo octo/demo
+gitee pr list --state open --limit 10
+gitee pr view 42
 gitee pr status
 gitee pr create --title "Use local head" --base develop --body-file ./body.md
-gitee pr comment 42 --repo octo/demo --body "Ship it"
-gitee pr checkout 42 --repo octo/demo
+gitee pr comment 42 --body "Ship it"
+gitee pr checkout 42
 ```
 
 `pr status` requires a local git checkout and authentication.
 `pr checkout` requires a local git checkout with an `origin` remote.
+Add `--repo owner/repo` only when local repo context is unavailable.
