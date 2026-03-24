@@ -93,3 +93,27 @@ fn help_json_can_describe_a_single_nested_command() {
     assert!(input_sources.iter().any(|source| source == "--body"));
     assert!(input_sources.iter().any(|source| source == "--body-file"));
 }
+
+#[test]
+fn help_json_can_describe_pr_edit() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "pr", "edit", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["path"], "pr edit");
+    assert_eq!(body["gh_equivalent"], "gh pr edit");
+    assert_eq!(body["auth"], "required");
+    assert_eq!(body["repo_inference"], true);
+
+    let flags = body["flags"].as_array().unwrap();
+    assert!(flags.iter().any(|flag| flag["name"] == "--title"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--state"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--draft"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--ready"));
+}
