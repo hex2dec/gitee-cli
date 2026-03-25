@@ -16,7 +16,7 @@ Use the Rust toolchain pinned in [`.tool-versions`](./.tool-versions) (`rust 1.9
 - `cargo clippy --all-targets --all-features -- -D warnings` is the preferred lint pass for new changes.
 
 ## Coding Style & Naming Conventions
-Follow standard Rust style: 4-space indentation, `snake_case` for modules/functions, `PascalCase` for types, and small enums/structs with explicit names. Prefer thin command parsing plus service-style methods, matching the current `AuthService`, `RepoService`, `IssueService`, and `PrService` split. Keep text and JSON output paths stable; changes to flags, stdout, stderr, or exit codes should be deliberate and test-backed.
+Follow standard Rust style: 4-space indentation, `snake_case` for modules/functions, `PascalCase` for types, and small enums/structs with explicit names. Prefer thin command parsing plus service-style methods, matching the current `AuthService`, `RepoService`, `IssueService`, and `PrService` split. Unsafe Rust is forbidden; keep `#![forbid(unsafe_code)]` enabled. Keep text and JSON output paths stable; changes to flags, stdout, stderr, or exit codes should be deliberate and test-backed.
 
 ## Testing Guidelines
 Favor integration tests that exercise the compiled binary with `assert_cmd`. Mock Gitee HTTP calls with `httpmock`, isolate filesystem state with `tempfile`, and cover both text and `--json` output when behavior changes. Name integration tests by feature and surface, using the existing `*_cli.rs` pattern. For git-dependent flows such as repo context inference, clone, PR create, PR status, and PR checkout, keep using real local git fixtures rather than replacing those paths with mocks. Small pure helpers can keep unit tests inline under `#[cfg(test)]`.
