@@ -114,6 +114,16 @@ If you only try one end-to-end workflow, start here:
 3. Run `gitee repo view --repo octo/demo --json`.
 4. Move into a local checkout and run `gitee pr status --state open --limit 10 --json`.
 
+## Install the Bundled Skill in Coding Agents
+
+In Codex, Claude Code, and similar coding agents, point the agent to the bundled [`using-gitee-cli` skill](./skills/using-gitee-cli/SKILL.md) and ask it to install the skill; the agent can complete the installation automatically.
+
+Example prompt:
+
+```text
+Please install this skill: [using-gitee-cli](/home/suo/workspace/gitee-cli/skills/using-gitee-cli/SKILL.md).
+```
+
 ## Common Workflows
 
 ### Check Authentication Before Doing Work

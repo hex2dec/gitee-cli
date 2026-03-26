@@ -113,6 +113,16 @@ gitee repo view --json
 3. 运行 `gitee repo view --repo octo/demo --json`。
 4. 进入一个本地 checkout 后，运行 `gitee pr status --state open --limit 10 --json`。
 
+## 在 Coding Agent 中安装内置 Skill
+
+在 Codex、Claude Code 等 coding agent 中，直接把内置的 [`using-gitee-cli` skill](./skills/using-gitee-cli/SKILL.md) 链接发给 agent 并要求它安装即可，agent 会自动完成安装。
+
+示例指令：
+
+```text
+请安装这个 skill：[using-gitee-cli](/home/suo/workspace/gitee-cli/skills/using-gitee-cli/SKILL.md)。
+```
+
 ## 常见工作流
 
 ### 在开始工作前检查认证状态
