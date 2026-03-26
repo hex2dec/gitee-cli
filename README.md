@@ -116,12 +116,12 @@ If you only try one end-to-end workflow, start here:
 
 ## Install the Bundled Skill in Coding Agents
 
-In Codex, Claude Code, and similar coding agents, point the agent to the bundled [`using-gitee-cli` skill](./skills/using-gitee-cli/SKILL.md) and ask it to install the skill; the agent can complete the installation automatically.
+In Codex, Claude Code, and similar coding agents, point the agent to the bundled [`using-gitee-cli` skill](https://raw.githubusercontent.com/hex2dec/gitee-cli/main/skills/using-gitee-cli/SKILL.md) and ask it to install the skill; the agent can complete the installation automatically.
 
 Example prompt:
 
 ```text
-Please install this skill: [using-gitee-cli](/home/suo/workspace/gitee-cli/skills/using-gitee-cli/SKILL.md).
+Please install this skill: [using-gitee-cli](https://raw.githubusercontent.com/hex2dec/gitee-cli/main/skills/using-gitee-cli/SKILL.md).
 ```
 
 ## Common Workflows
