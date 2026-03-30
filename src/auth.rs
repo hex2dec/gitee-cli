@@ -64,7 +64,8 @@ impl AuthService {
             .client
             .fetch_current_user(&token)
             .map_err(map_auth_error)?;
-        self.config
+        let saved_source = self
+            .config
             .save_token(&token)
             .map_err(CommandError::config)?;
 
@@ -73,7 +74,7 @@ impl AuthService {
             EXIT_OK,
             AuthState {
                 authenticated: true,
-                source: "config",
+                source: saved_source.as_str(),
                 username: Some(username),
                 logged_out: false,
             },

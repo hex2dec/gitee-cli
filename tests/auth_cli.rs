@@ -77,8 +77,12 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
     assert_eq!(login_output.status.code(), Some(0));
     let login_body: Value = serde_json::from_slice(&login_output.stdout).unwrap();
     assert_eq!(login_body["authenticated"], true);
-    assert_eq!(login_body["source"], "config");
+    assert_eq!(login_body["source"], "keyring");
     assert_eq!(login_body["username"], "octocat");
+    assert!(
+        !config_file_exists(config_dir.path()),
+        "login should not create a plaintext config file for credentials"
+    );
 
     let status_output = Command::cargo_bin("gitee")
         .unwrap()
@@ -92,7 +96,7 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
     assert_eq!(status_output.status.code(), Some(0));
     let status_body: Value = serde_json::from_slice(&status_output.stdout).unwrap();
     assert_eq!(status_body["authenticated"], true);
-    assert_eq!(status_body["source"], "config");
+    assert_eq!(status_body["source"], "keyring");
     assert_eq!(status_body["username"], "octocat");
     user_mock.assert_hits(2);
 }
@@ -130,11 +134,15 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
     assert_eq!(login_output.status.code(), Some(0));
     let login_body: Value = serde_json::from_slice(&login_output.stdout).unwrap();
     assert_eq!(login_body["authenticated"], true);
-    assert_eq!(login_body["source"], "config");
+    assert_eq!(login_body["source"], "keyring");
     assert_eq!(login_body["username"], "home-user");
     assert_eq!(
         login_body["config_path"],
         expected_config_path.display().to_string()
+    );
+    assert!(
+        !expected_config_path.exists(),
+        "login should not create a plaintext config file for credentials"
     );
 
     let status_output = Command::cargo_bin("gitee")
@@ -152,13 +160,13 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
     assert_eq!(status_output.status.code(), Some(0));
     let status_body: Value = serde_json::from_slice(&status_output.stdout).unwrap();
     assert_eq!(status_body["authenticated"], true);
-    assert_eq!(status_body["source"], "config");
+    assert_eq!(status_body["source"], "keyring");
     assert_eq!(status_body["username"], "home-user");
     assert_eq!(
         status_body["config_path"],
         expected_config_path.display().to_string()
     );
-    assert!(expected_config_path.exists());
+    assert!(!expected_config_path.exists());
     user_mock.assert_hits(2);
 }
 
@@ -189,8 +197,12 @@ fn auth_login_can_read_the_token_from_stdin() {
     assert_eq!(login_output.status.code(), Some(0));
     let login_body: Value = serde_json::from_slice(&login_output.stdout).unwrap();
     assert_eq!(login_body["authenticated"], true);
-    assert_eq!(login_body["source"], "config");
+    assert_eq!(login_body["source"], "keyring");
     assert_eq!(login_body["username"], "stdin-user");
+    assert!(
+        !config_file_exists(config_dir.path()),
+        "login should not create a plaintext config file for credentials"
+    );
 
     let status_output = Command::cargo_bin("gitee")
         .unwrap()
@@ -204,7 +216,7 @@ fn auth_login_can_read_the_token_from_stdin() {
     assert_eq!(status_output.status.code(), Some(0));
     let status_body: Value = serde_json::from_slice(&status_output.stdout).unwrap();
     assert_eq!(status_body["authenticated"], true);
-    assert_eq!(status_body["source"], "config");
+    assert_eq!(status_body["source"], "keyring");
     assert_eq!(status_body["username"], "stdin-user");
     user_mock.assert_hits(2);
 }
@@ -235,8 +247,12 @@ fn auth_login_accepts_json_flag_before_token_flag() {
     assert_eq!(login_output.status.code(), Some(0));
     let login_body: Value = serde_json::from_slice(&login_output.stdout).unwrap();
     assert_eq!(login_body["authenticated"], true);
-    assert_eq!(login_body["source"], "config");
+    assert_eq!(login_body["source"], "keyring");
     assert_eq!(login_body["username"], "ordered-user");
+    assert!(
+        !config_file_exists(config_dir.path()),
+        "login should not create a plaintext config file for credentials"
+    );
     user_mock.assert_hits(1);
 }
 
@@ -346,6 +362,10 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
     assert_eq!(status_body["authenticated"], false);
     assert_eq!(status_body["source"], "none");
     assert_eq!(status_body["username"], Value::Null);
+    assert!(
+        !config_file_exists(config_dir.path()),
+        "logout should not recreate a plaintext config file"
+    );
     user_mock.assert_hits(1);
 }
 

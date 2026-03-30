@@ -32,7 +32,7 @@ fn auth_login_accepts_equals_syntax_for_long_options() {
 
     let body: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(body["authenticated"], true);
-    assert_eq!(body["source"], "config");
+    assert_eq!(body["source"], "keyring");
     assert_eq!(body["username"], "inline-user");
 
     user_mock.assert_hits(1);

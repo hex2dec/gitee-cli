@@ -1,20 +1,24 @@
 use std::env;
-use std::fs;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use crate::credentials::{
+    CredentialError, CredentialStore, ResolvedToken, TokenSource, credential_store_for_process,
+};
 
 const CONFIG_DIR_NAME: &str = "gitee";
 const FALLBACK_CONFIG_DIR_NAME: &str = ".gitee";
 
 pub struct ConfigStore {
     config_dir: PathBuf,
+    credentials: Box<dyn CredentialStore>,
 }
 
 impl ConfigStore {
     pub fn from_env() -> Self {
+        let config_dir = config_dir();
         Self {
-            config_dir: config_dir(),
+            credentials: credential_store_for_process(&config_dir),
+            config_dir,
         }
     }
 
@@ -29,90 +33,50 @@ impl ConfigStore {
             }
         }
 
-        let config = self.load_config()?;
-        Ok(config.map(|config| ResolvedToken {
-            token: config.token,
-            source: TokenSource::Config,
-        }))
+        Ok(self
+            .credentials
+            .load_token()
+            .map_err(ConfigError::store)?
+            .map(|token| ResolvedToken {
+                token,
+                source: self.credentials.token_source(),
+            }))
     }
 
-    pub fn save_token(&self, token: &str) -> Result<(), ConfigError> {
-        fs::create_dir_all(&self.config_dir).map_err(ConfigError::Io)?;
-
-        let contents = toml::to_string(&ConfigFile {
-            token: token.to_string(),
-        })
-        .map_err(ConfigError::TomlSerialize)?;
-
-        fs::write(self.config_path_buf(), contents).map_err(ConfigError::Io)
+    pub fn save_token(&self, token: &str) -> Result<TokenSource, ConfigError> {
+        self.credentials
+            .save_token(token)
+            .map_err(ConfigError::store)?;
+        Ok(self.credentials.token_source())
     }
 
     pub fn clear_token(&self) -> Result<(), ConfigError> {
-        let path = self.config_path_buf();
-        if !path.exists() {
-            return Ok(());
-        }
-
-        fs::remove_file(path).map_err(ConfigError::Io)
+        self.credentials.clear_token().map_err(ConfigError::store)
     }
 
     pub fn config_path(&self) -> String {
         self.config_path_buf().display().to_string()
     }
-
-    fn load_config(&self) -> Result<Option<ConfigFile>, ConfigError> {
-        let path = self.config_path_buf();
-        if !path.exists() {
-            return Ok(None);
-        }
-
-        let contents = fs::read_to_string(path).map_err(ConfigError::Io)?;
-        let config = toml::from_str::<ConfigFile>(&contents).map_err(ConfigError::Toml)?;
-        Ok(Some(config))
-    }
-
     fn config_path_buf(&self) -> PathBuf {
         self.config_dir.join("config.toml")
     }
 }
 
-pub struct ResolvedToken {
-    pub token: String,
-    pub source: TokenSource,
-}
-
-pub enum TokenSource {
-    Env,
-    Config,
-}
-
-impl TokenSource {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Env => "env",
-            Self::Config => "config",
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-struct ConfigFile {
-    token: String,
-}
-
 pub enum ConfigError {
-    Io(std::io::Error),
-    Toml(toml::de::Error),
-    TomlSerialize(toml::ser::Error),
+    Store(CredentialError),
 }
 
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io(err) => write!(f, "{err}"),
-            Self::Toml(err) => write!(f, "{err}"),
-            Self::TomlSerialize(err) => write!(f, "{err}"),
+            Self::Store(err) => write!(f, "{err}"),
         }
+    }
+}
+
+impl ConfigError {
+    fn store(error: CredentialError) -> Self {
+        Self::Store(error)
     }
 }
 
