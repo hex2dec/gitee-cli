@@ -508,9 +508,11 @@ fn parse_repo_clone_args(args: &[String]) -> Result<ParseOutcome<RepoCloneReques
             repo: repo.clone(),
             destination: positionals.get(1).cloned(),
             transport: if ssh_count == 1 {
-                CloneTransport::Ssh
+                Some(CloneTransport::Ssh)
+            } else if https_count == 1 {
+                Some(CloneTransport::Https)
             } else {
-                CloneTransport::Https
+                None
             },
         })
     })
@@ -1073,7 +1075,7 @@ fn repo_clone_command() -> Command {
     base_command("clone", "gitee repo clone")
         .about("Clone a repository by owner/repo slug")
         .arg(json_flag())
-        .arg(count_flag("https", "https", "Clone over HTTPS (default)"))
+        .arg(count_flag("https", "https", "Clone over HTTPS"))
         .arg(count_flag("ssh", "ssh", "Clone over SSH"))
         .arg(positionals_arg(
             "positionals",
@@ -1993,7 +1995,7 @@ fn repo_clone_help_json() -> serde_json::Value {
         false,
         vec![
             help_option_json("--json", None, "Output machine-readable JSON", false),
-            help_option_json("--https", None, "Clone over HTTPS (default)", false),
+            help_option_json("--https", None, "Clone over HTTPS", false),
             help_option_json("--ssh", None, "Clone over SSH", false),
         ],
         vec![
@@ -2008,9 +2010,12 @@ fn repo_clone_help_json() -> serde_json::Value {
         Vec::new(),
         vec![
             "gitee repo clone octo/demo",
-            "gitee repo clone octo/demo demo-ssh --ssh --json",
+            "gitee repo clone octo/demo demo-https --https --json",
         ],
-        vec!["Use at most one of --https or --ssh."],
+        vec![
+            "Use at most one of --https or --ssh.",
+            "When neither flag is provided, the CLI uses a saved clone protocol preference or prompts on first use.",
+        ],
     )
 }
 

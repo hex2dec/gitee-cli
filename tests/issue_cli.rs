@@ -352,8 +352,11 @@ fn issue_create_surfaces_remote_validation_errors_instead_of_auth_failure() {
 
 #[test]
 fn issue_create_requires_authentication() {
+    let config_dir = TempDir::new().unwrap();
+
     let output = Command::cargo_bin("gitee")
         .unwrap()
+        .env("GITEE_CONFIG_DIR", config_dir.path())
         .env_remove("GITEE_TOKEN")
         .args([
             "issue",

@@ -1,11 +1,13 @@
 use std::fs;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
 
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_GIT, EXIT_OK, EXIT_REMOTE, OutputFormat};
-use crate::config::ConfigStore;
+use crate::config::{CloneProtocol, ConfigStore};
 use crate::gitee_api::{GiteeClient, RepoError, Repository};
 use crate::repo_context::infer_repo_context;
 
@@ -93,7 +95,8 @@ impl RepoService {
             .client
             .fetch_repository(&slug.owner, &slug.name, token.as_deref())
             .map_err(map_repo_error)?;
-        let clone_url = request.transport.select_url(&repository).to_string();
+        let transport = self.resolve_clone_transport(request.transport)?;
+        let clone_url = transport.select_url(&repository).to_string();
         let destination = resolve_clone_destination(request.destination.as_deref(), &repository);
 
         ensure_clone_destination_is_available(&destination)?;
@@ -104,10 +107,34 @@ impl RepoService {
             RepoCloneView {
                 repository,
                 clone_url,
-                transport: request.transport,
+                transport,
                 destination: destination.canonicalize().unwrap_or(destination),
             },
         ))
+    }
+
+    fn resolve_clone_transport(
+        &self,
+        requested: Option<CloneTransport>,
+    ) -> Result<CloneTransport, CommandError> {
+        if let Some(transport) = requested {
+            return Ok(transport);
+        }
+
+        if let Some(protocol) = self
+            .config
+            .load_clone_protocol()
+            .map_err(CommandError::config)?
+        {
+            return Ok(protocol.into());
+        }
+
+        let transport = prompt_for_clone_transport()?;
+        self.config
+            .save_clone_protocol(transport.into())
+            .map_err(CommandError::config)?;
+
+        Ok(transport)
     }
 }
 
@@ -120,7 +147,7 @@ pub struct RepoCloneRequest {
     pub output: OutputFormat,
     pub repo: String,
     pub destination: Option<String>,
-    pub transport: CloneTransport,
+    pub transport: Option<CloneTransport>,
 }
 
 #[derive(Clone, Copy)]
@@ -203,10 +230,38 @@ impl CloneTransport {
         }
     }
 
+    fn parse_choice(input: &str) -> Result<Self, CommandError> {
+        match input.trim().to_ascii_lowercase().as_str() {
+            "https" | "2" => Ok(Self::Https),
+            "ssh" | "1" => Ok(Self::Ssh),
+            _ => Err(CommandError::usage(
+                "clone protocol must be selected as ssh or https",
+            )),
+        }
+    }
+
     fn select_url(self, repository: &Repository) -> &str {
         match self {
             Self::Https => &repository.clone_url,
             Self::Ssh => &repository.ssh_url,
+        }
+    }
+}
+
+impl From<CloneProtocol> for CloneTransport {
+    fn from(value: CloneProtocol) -> Self {
+        match value {
+            CloneProtocol::Https => Self::Https,
+            CloneProtocol::Ssh => Self::Ssh,
+        }
+    }
+}
+
+impl From<CloneTransport> for CloneProtocol {
+    fn from(value: CloneTransport) -> Self {
+        match value {
+            CloneTransport::Https => Self::Https,
+            CloneTransport::Ssh => Self::Ssh,
         }
     }
 }
@@ -300,18 +355,53 @@ fn ensure_clone_destination_is_available(destination: &Path) -> Result<(), Comma
 }
 
 fn run_git_clone(clone_url: &str, destination: &Path) -> Result<(), CommandError> {
-    let output = Command::new("git")
+    let mut child = Command::new("git")
         .arg("clone")
+        .arg("--progress")
         .arg(clone_url)
         .arg(destination)
-        .output()
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|err| CommandError::git(format!("failed to run git: {err}")))?;
 
-    if output.status.success() {
+    let Some(stderr) = child.stderr.take() else {
+        return Err(CommandError::git("failed to capture git stderr"));
+    };
+
+    let stderr_thread = thread::spawn(move || -> Result<Vec<u8>, io::Error> {
+        let mut reader = stderr;
+        let mut buffer = Vec::new();
+        let mut chunk = [0_u8; 8192];
+        let mut writer = io::stderr().lock();
+
+        loop {
+            let bytes_read = reader.read(&mut chunk)?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            writer.write_all(&chunk[..bytes_read])?;
+            writer.flush()?;
+            buffer.extend_from_slice(&chunk[..bytes_read]);
+        }
+
+        Ok(buffer)
+    });
+
+    let status = child
+        .wait()
+        .map_err(|err| CommandError::git(format!("failed to wait for git: {err}")))?;
+    let stderr_bytes = stderr_thread
+        .join()
+        .map_err(|_| CommandError::git("failed to read git stderr"))?
+        .map_err(|err| CommandError::git(format!("failed to read git stderr: {err}")))?;
+
+    if status.success() {
         return Ok(());
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stderr = String::from_utf8_lossy(&stderr_bytes).trim().to_string();
     let message = if stderr.is_empty() {
         "git clone failed".to_string()
     } else {
@@ -319,6 +409,24 @@ fn run_git_clone(clone_url: &str, destination: &Path) -> Result<(), CommandError
     };
 
     Err(CommandError::git(message))
+}
+
+fn prompt_for_clone_transport() -> Result<CloneTransport, CommandError> {
+    let mut stderr = io::stderr();
+    writeln!(stderr, "No saved clone protocol preference.")
+        .map_err(|err| CommandError::usage(format!("failed to write prompt: {err}")))?;
+    write!(stderr, "Choose clone protocol [ssh/https]: ")
+        .map_err(|err| CommandError::usage(format!("failed to write prompt: {err}")))?;
+    stderr
+        .flush()
+        .map_err(|err| CommandError::usage(format!("failed to write prompt: {err}")))?;
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|err| CommandError::usage(format!("failed to read clone protocol: {err}")))?;
+
+    CloneTransport::parse_choice(&input)
 }
 
 fn map_repo_error(error: RepoError) -> CommandError {

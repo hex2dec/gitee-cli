@@ -155,16 +155,16 @@ When you are already inside a local checkout:
 gitee repo view --json
 ```
 
-Clone over HTTPS by default:
+Clone using your saved protocol preference, or choose SSH/HTTPS on first use:
 
 ```bash
 gitee repo clone octo/demo
 ```
 
-Clone over SSH to an explicit destination:
+Clone over HTTPS to an explicit destination:
 
 ```bash
-gitee repo clone octo/demo demo-ssh --ssh --json
+gitee repo clone octo/demo demo-https --https --json
 ```
 
 ### Read Issue Context Before Making a Change
@@ -296,7 +296,8 @@ Config directory resolution order:
 3. `HOME/.config/gitee`
 4. current directory `./.gitee`
 
-By default the saved token lives at `~/.config/gitee/config.toml`.
+By default `~/.config/gitee/config.toml` stores the saved token and non-secret clone
+protocol preference.
 
 <details>
 <summary>Relevant environment variables</summary>
