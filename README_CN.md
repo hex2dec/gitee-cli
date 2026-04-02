@@ -67,51 +67,14 @@ gitee help --json
 
 ## 从源码构建
 
-如果你需要开发版，或者目标平台不在当前发布资产范围内，可以从源码构建：
-
-本地构建二进制：
+如果你需要本地构建版本，或者目标平台不在当前发布资产范围内，可以从源码构建：
 
 ```bash
-cargo build
+cargo build --release
 ```
 
-在仓库内直接运行命令进行开发调试：
-
-```bash
-cargo run -- auth status --json
-```
-
-使用 token 登录：
-
-```bash
-gitee auth login --token "$GITEE_TOKEN" --json
-```
-
-检查认证是否可用：
-
-```bash
-gitee auth status --json
-```
-
-直接查看指定仓库：
-
-```bash
-gitee repo view --repo octo/demo --json
-```
-
-或者在本地 Gitee 仓库目录中，让 `gitee-cli` 通过 `origin` 自动推断目标
-仓库：
-
-```bash
-gitee repo view --json
-```
-
-如果你只想先体验一条完整路径，建议按下面顺序试用：
-
-1. 构建 CLI。
-2. 使用个人访问令牌登录。
-3. 运行 `gitee repo view --repo octo/demo --json`。
-4. 进入一个本地 checkout 后，运行 `gitee pr status --state open --limit 10 --json`。
+贡献者环境准备、验证命令和仓库约定请见
+[CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md)。
 
 ## 在 Coding Agent 中安装内置 Skill
 
@@ -326,25 +289,10 @@ gitee pr checkout 42 --repo octo/demo --json
 - `6`：资源不存在
 - `7`：本地 git 错误
 
-## 开发
+## 参与贡献
 
-项目使用 [`.tool-versions`](./.tool-versions) 中指定的 Rust `1.94.0`。
-
-```bash
-cargo build
-cargo test
-cargo fmt -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-```
-
-常用 smoke tests：
-
-```bash
-cargo run -- auth status --json
-cargo run -- repo view --repo octo/demo --json
-cargo run -- issue list --repo octo/demo --json
-cargo run -- pr list --repo octo/demo --json
-```
+本地开发、测试和 Pull Request 约定请见
+[CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md)。
 
 ## 许可证
 
