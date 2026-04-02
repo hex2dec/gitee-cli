@@ -67,52 +67,15 @@ Each release also includes `gitee-<version>-checksums.txt`.
 
 ## Build From Source
 
-If you need a development build or a platform outside the published release
-assets, build from source:
-
-Build the binary locally:
+If you need a local build or a platform outside the published release assets,
+build from source:
 
 ```bash
-cargo build
+cargo build --release
 ```
 
-Run commands from the repository during development:
-
-```bash
-cargo run -- auth status --json
-```
-
-Authenticate with a token:
-
-```bash
-gitee auth login --token "$GITEE_TOKEN" --json
-```
-
-Check that auth is usable:
-
-```bash
-gitee auth status --json
-```
-
-Inspect a repository directly:
-
-```bash
-gitee repo view --repo octo/demo --json
-```
-
-Or, inside a local Gitee checkout, let `gitee-cli` infer the repository from
-`origin`:
-
-```bash
-gitee repo view --json
-```
-
-If you only try one end-to-end workflow, start here:
-
-1. Build the CLI.
-2. Log in with a personal access token.
-3. Run `gitee repo view --repo octo/demo --json`.
-4. Move into a local checkout and run `gitee pr status --state open --limit 10 --json`.
+For contributor setup, validation commands, and repository conventions, see
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Install the Bundled Skill in Coding Agents
 
@@ -330,25 +293,10 @@ Exit codes:
 - `6`: resource not found
 - `7`: local git error
 
-## Development
+## Contributing
 
-The project uses Rust `1.94.0` from [`.tool-versions`](./.tool-versions).
-
-```bash
-cargo build
-cargo test
-cargo fmt -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-```
-
-Useful smoke tests:
-
-```bash
-cargo run -- auth status --json
-cargo run -- repo view --repo octo/demo --json
-cargo run -- issue list --repo octo/demo --json
-cargo run -- pr list --repo octo/demo --json
-```
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for local development, testing, and
+pull request guidance.
 
 ## License
 
