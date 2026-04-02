@@ -154,16 +154,16 @@ gitee repo view --repo octo/demo --json
 gitee repo view --json
 ```
 
-默认使用 HTTPS 克隆：
+使用已保存的克隆协议偏好；首次使用时选择 SSH 或 HTTPS：
 
 ```bash
 gitee repo clone octo/demo
 ```
 
-使用 SSH 克隆到指定目录：
+使用 HTTPS 克隆到指定目录：
 
 ```bash
-gitee repo clone octo/demo demo-ssh --ssh --json
+gitee repo clone octo/demo demo-https --https --json
 ```
 
 ### 在修改代码前先阅读 Issue 上下文

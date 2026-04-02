@@ -24,5 +24,8 @@ Favor integration tests that exercise the compiled binary with `assert_cmd`. Moc
 ## Commit & Pull Request Guidelines
 Recent history includes both plain commit subjects such as `feat: add auth CLI skeleton` and historical subjects suffixed with `(#13)`. Treat the `(#13)` style as repository history, not as the default format for new handwritten commits. Prefer a short imperative subject, optionally prefixed with `feat:` or `chore:`, and do not append PR numbers to manual commit messages unless the user explicitly asks for that format. If an issue or PR reference matters, put it in the PR title, PR description, or linked metadata instead of the commit subject. GitHub pull requests and issues should be written in English. PRs should describe the user-visible CLI change, list validation commands run, and include sample output when flags, JSON payloads, or exit codes change.
 
+## Documentation Guidelines
+Keep `README.md` and `README_CN.md` in sync for user-facing behavior, install steps, command examples, release/platform notes, and workflow guidance. When one of those files changes, update the other in the same change unless there is a deliberate language-specific exception and you call it out explicitly.
+
 ## Security & Configuration Tips
 Never commit real Gitee tokens. Runtime configuration is read from `GITEE_TOKEN`, `GITEE_CONFIG_DIR`, `XDG_CONFIG_HOME`, `HOME`, `USERPROFILE`, `HOMEDRIVE`, and `HOMEPATH`; persisted credentials default to `~/.config/gitee/config.toml` when `GITEE_CONFIG_DIR` is not set. Use `GITEE_BASE_URL` only for tests or local API mocking.
