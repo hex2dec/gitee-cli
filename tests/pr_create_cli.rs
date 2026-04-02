@@ -309,8 +309,11 @@ fn pr_create_rejects_body_and_body_file_together() {
 
 #[test]
 fn pr_create_requires_authentication() {
+    let config_dir = TempDir::new().unwrap();
+
     let output = Command::cargo_bin("gitee")
         .unwrap()
+        .env("GITEE_CONFIG_DIR", config_dir.path())
         .env_remove("GITEE_TOKEN")
         .args([
             "pr",

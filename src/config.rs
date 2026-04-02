@@ -30,21 +30,18 @@ impl ConfigStore {
         }
 
         let config = self.load_config()?;
-        Ok(config.map(|config| ResolvedToken {
-            token: config.token,
-            source: TokenSource::Config,
+        Ok(config.and_then(|config| {
+            config.token.map(|token| ResolvedToken {
+                token,
+                source: TokenSource::Config,
+            })
         }))
     }
 
     pub fn save_token(&self, token: &str) -> Result<(), ConfigError> {
-        fs::create_dir_all(&self.config_dir).map_err(ConfigError::Io)?;
-
-        let contents = toml::to_string(&ConfigFile {
-            token: token.to_string(),
-        })
-        .map_err(ConfigError::TomlSerialize)?;
-
-        fs::write(self.config_path_buf(), contents).map_err(ConfigError::Io)
+        let mut config = self.load_config()?.unwrap_or_default();
+        config.token = Some(token.to_string());
+        self.write_config(&config)
     }
 
     pub fn clear_token(&self) -> Result<(), ConfigError> {
@@ -53,7 +50,25 @@ impl ConfigStore {
             return Ok(());
         }
 
-        fs::remove_file(path).map_err(ConfigError::Io)
+        let mut config = self.load_config()?.unwrap_or_default();
+        config.token = None;
+
+        if config.is_empty() {
+            return fs::remove_file(path).map_err(ConfigError::Io);
+        }
+
+        self.write_config(&config)
+    }
+
+    pub fn load_clone_protocol(&self) -> Result<Option<CloneProtocol>, ConfigError> {
+        let config = self.load_config()?;
+        Ok(config.and_then(|config| config.clone_protocol))
+    }
+
+    pub fn save_clone_protocol(&self, protocol: CloneProtocol) -> Result<(), ConfigError> {
+        let mut config = self.load_config()?.unwrap_or_default();
+        config.clone_protocol = Some(protocol);
+        self.write_config(&config)
     }
 
     pub fn config_path(&self) -> String {
@@ -74,6 +89,13 @@ impl ConfigStore {
     fn config_path_buf(&self) -> PathBuf {
         self.config_dir.join("config.toml")
     }
+
+    fn write_config(&self, config: &ConfigFile) -> Result<(), ConfigError> {
+        fs::create_dir_all(&self.config_dir).map_err(ConfigError::Io)?;
+
+        let contents = toml::to_string(config).map_err(ConfigError::TomlSerialize)?;
+        fs::write(self.config_path_buf(), contents).map_err(ConfigError::Io)
+    }
 }
 
 pub struct ResolvedToken {
@@ -86,6 +108,13 @@ pub enum TokenSource {
     Config,
 }
 
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CloneProtocol {
+    Https,
+    Ssh,
+}
+
 impl TokenSource {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -95,9 +124,18 @@ impl TokenSource {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
 struct ConfigFile {
-    token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    clone_protocol: Option<CloneProtocol>,
+}
+
+impl ConfigFile {
+    fn is_empty(&self) -> bool {
+        self.token.is_none() && self.clone_protocol.is_none()
+    }
 }
 
 pub enum ConfigError {
