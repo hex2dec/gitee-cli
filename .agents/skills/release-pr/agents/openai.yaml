@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release PR"
+  short_description: "Prepare release checks and GitHub PRs"
+  default_prompt: "Use $release-pr to prepare a new version release branch and GitHub PR for this repository."
