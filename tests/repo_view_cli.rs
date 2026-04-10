@@ -50,6 +50,53 @@ fn repo_view_supports_explicit_repo_slug_in_json_output() {
 }
 
 #[test]
+fn repo_view_supports_gh_style_json_field_selection() {
+    let server = MockServer::start();
+
+    let repo_mock = server.mock(|when, then| {
+        when.method(GET).path("/v5/repos/octo/demo");
+        then.status(200).json_body(serde_json::json!({
+            "full_name": "octo/demo",
+            "name": "demo",
+            "path": "demo",
+            "html_url": "https://gitee.com/octo/demo",
+            "ssh_url": "git@gitee.com:octo/demo.git",
+            "clone_url": "https://gitee.com/octo/demo.git",
+            "fork": false,
+            "default_branch": "main"
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .args([
+            "repo",
+            "view",
+            "--repo",
+            "octo/demo",
+            "--json",
+            "nameWithOwner,url",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["nameWithOwner"], "octo/demo");
+    assert_eq!(body["url"], "https://gitee.com/octo/demo");
+
+    let object = body.as_object().unwrap();
+    assert_eq!(object.len(), 2);
+    assert!(!object.contains_key("full_name"));
+    assert!(!object.contains_key("html_url"));
+
+    repo_mock.assert_hits(1);
+}
+
+#[test]
 fn repo_view_handles_private_repo_payload_without_clone_url() {
     let server = MockServer::start();
 

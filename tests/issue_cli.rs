@@ -1134,6 +1134,58 @@ fn issue_view_skips_comment_history_by_default_and_reports_stable_json_output() 
 }
 
 #[test]
+fn issue_view_supports_gh_style_json_field_selection() {
+    let server = MockServer::start();
+
+    let issue_mock = server.mock(|when, then| {
+        when.method(GET).path("/v5/repos/octo/demo/issues/I123");
+        then.status(200).json_body(serde_json::json!({
+            "number": "I123",
+            "title": "Fix issue sync panic",
+            "state": "open",
+            "body": "full issue body",
+            "comments": 3,
+            "html_url": "https://gitee.com/octo/demo/issues/I123",
+            "created_at": "2026-03-20T10:00:00Z",
+            "updated_at": "2026-03-20T12:00:00Z",
+            "user": {
+                "login": "bob"
+            }
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .args([
+            "issue",
+            "view",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--json",
+            "number,title,url",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["number"], "I123");
+    assert_eq!(body["title"], "Fix issue sync panic");
+    assert_eq!(body["url"], "https://gitee.com/octo/demo/issues/I123");
+
+    let object = body.as_object().unwrap();
+    assert_eq!(object.len(), 3);
+    assert!(!object.contains_key("html_url"));
+    assert!(!object.contains_key("body"));
+
+    issue_mock.assert_hits(1);
+}
+
+#[test]
 fn issue_view_includes_paginated_comments_when_requested() {
     let server = MockServer::start();
 

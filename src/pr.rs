@@ -561,28 +561,12 @@ fn resolve_repo(repo: Option<&str>) -> Result<ResolvedRepo, CommandError> {
 
 fn render_pr_view(output: OutputFormat, pull_request: PullRequest) -> CommandOutcome {
     match output {
-        OutputFormat::Json => CommandOutcome::json(
+        OutputFormat::Json { fields } => CommandOutcome::json(
             EXIT_OK,
-            json!({
-                "number": pull_request.number,
-                "state": pull_request.state,
-                "title": pull_request.title,
-                "body": pull_request.body,
-                "author": pull_request.author,
-                "repository": pull_request.repository,
-                "head_ref": pull_request.head.r#ref,
-                "head_sha": pull_request.head.sha,
-                "head_repository": pull_request.head.repository,
-                "base_ref": pull_request.base.r#ref,
-                "base_sha": pull_request.base.sha,
-                "base_repository": pull_request.base.repository,
-                "draft": pull_request.draft,
-                "mergeable": pull_request.mergeable,
-                "html_url": pull_request.html_url,
-                "created_at": pull_request.created_at,
-                "updated_at": pull_request.updated_at,
-                "merged_at": pull_request.merged_at,
-            }),
+            match fields {
+                Some(fields) => pr_selected_json(&pull_request, &fields),
+                None => pr_detail_json(&pull_request),
+            },
         ),
         OutputFormat::Text => CommandOutcome::text(
             EXIT_OK,
@@ -612,7 +596,7 @@ fn render_pr_comment(
     comment: PullRequestComment,
 ) -> CommandOutcome {
     match output {
-        OutputFormat::Json => CommandOutcome::json(
+        OutputFormat::Json { .. } => CommandOutcome::json(
             EXIT_OK,
             json!({
                 "id": comment.id,
@@ -637,27 +621,28 @@ fn render_pr_comment(
 }
 
 fn render_pr_create(output: OutputFormat, pull_request: PullRequest) -> CommandOutcome {
-    match output {
-        OutputFormat::Json => render_pr_view(OutputFormat::Json, pull_request),
-        OutputFormat::Text => CommandOutcome::text(
-            EXIT_OK,
-            format!(
-                "Created pull request #{}\nrepository: {}\nhead: {}:{}\nbase: {}:{}\nurl: {}",
-                pull_request.number,
-                pull_request.repository,
-                pull_request.head.repository,
-                pull_request.head.r#ref,
-                pull_request.base.repository,
-                pull_request.base.r#ref,
-                pull_request.html_url,
-            ),
-        ),
+    if matches!(&output, OutputFormat::Json { .. }) {
+        return render_pr_view(output, pull_request);
     }
+
+    CommandOutcome::text(
+        EXIT_OK,
+        format!(
+            "Created pull request #{}\nrepository: {}\nhead: {}:{}\nbase: {}:{}\nurl: {}",
+            pull_request.number,
+            pull_request.repository,
+            pull_request.head.repository,
+            pull_request.head.r#ref,
+            pull_request.base.repository,
+            pull_request.base.r#ref,
+            pull_request.html_url,
+        ),
+    )
 }
 
 fn render_pr_checkout(output: OutputFormat, checkout: PrCheckoutResult) -> CommandOutcome {
     match output {
-        OutputFormat::Json => CommandOutcome::json(
+        OutputFormat::Json { .. } => CommandOutcome::json(
             EXIT_OK,
             json!({
                 "repository": checkout.repository,
@@ -691,7 +676,7 @@ fn render_pr_list(
     pull_requests: Vec<PullRequest>,
 ) -> CommandOutcome {
     match output {
-        OutputFormat::Json => CommandOutcome::json(
+        OutputFormat::Json { .. } => CommandOutcome::json(
             EXIT_OK,
             json!({
                 "repository": format!("{}/{}", repo.owner, repo.name),
@@ -714,7 +699,7 @@ fn render_pr_status(
     assigned_prs: Vec<PullRequest>,
 ) -> CommandOutcome {
     match output {
-        OutputFormat::Json => CommandOutcome::json(
+        OutputFormat::Json { .. } => CommandOutcome::json(
             EXIT_OK,
             json!({
                 "repository": format!("{}/{}", repo.owner, repo.name),
@@ -775,6 +760,46 @@ fn pr_summary_json(pull_request: &PullRequest) -> serde_json::Value {
         "updated_at": pull_request.updated_at,
         "merged_at": pull_request.merged_at,
     })
+}
+
+fn pr_detail_json(pull_request: &PullRequest) -> serde_json::Value {
+    json!({
+        "number": pull_request.number,
+        "state": pull_request.state,
+        "title": pull_request.title,
+        "body": pull_request.body,
+        "author": pull_request.author,
+        "repository": pull_request.repository,
+        "head_ref": pull_request.head.r#ref,
+        "head_sha": pull_request.head.sha,
+        "head_repository": pull_request.head.repository,
+        "base_ref": pull_request.base.r#ref,
+        "base_sha": pull_request.base.sha,
+        "base_repository": pull_request.base.repository,
+        "draft": pull_request.draft,
+        "mergeable": pull_request.mergeable,
+        "html_url": pull_request.html_url,
+        "created_at": pull_request.created_at,
+        "updated_at": pull_request.updated_at,
+        "merged_at": pull_request.merged_at,
+    })
+}
+
+fn pr_selected_json(pull_request: &PullRequest, fields: &[String]) -> serde_json::Value {
+    let mut selected = serde_json::Map::with_capacity(fields.len());
+
+    for field in fields {
+        let value = match field.as_str() {
+            "number" => json!(pull_request.number),
+            "title" => json!(pull_request.title),
+            "url" => json!(pull_request.html_url),
+            _ => unreachable!("unsupported pull request json field"),
+        };
+
+        selected.insert(field.clone(), value);
+    }
+
+    serde_json::Value::Object(selected)
 }
 
 fn render_optional_bool(value: Option<bool>) -> &'static str {

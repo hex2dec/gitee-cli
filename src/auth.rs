@@ -97,7 +97,7 @@ impl AuthService {
 
     fn render_state(&self, output: OutputFormat, code: u8, state: AuthState) -> CommandOutcome {
         match output {
-            OutputFormat::Json => CommandOutcome::json(
+            OutputFormat::Json { .. } => CommandOutcome::json(
                 code,
                 json!({
                     "authenticated": state.authenticated,

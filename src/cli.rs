@@ -20,6 +20,10 @@ enum ParseOutcome<T> {
     Help(CommandOutcome),
 }
 
+const PR_DETAIL_JSON_FIELDS: &[&str] = &["number", "title", "url"];
+const REPO_VIEW_JSON_FIELDS: &[&str] = &["name", "nameWithOwner", "url"];
+const ISSUE_DETAIL_JSON_FIELDS: &[&str] = &["number", "title", "url"];
+
 pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
     let Some((command, rest)) = args.split_first() else {
         return Err(CommandError::usage("missing command"));
@@ -137,7 +141,7 @@ fn run_help(args: &[String]) -> Result<CommandOutcome, CommandError> {
 
         match output {
             OutputFormat::Text => Ok(render_help((topic.text_command)())),
-            OutputFormat::Json => Ok(CommandOutcome::json(EXIT_OK, (topic.json)())),
+            OutputFormat::Json { .. } => Ok(CommandOutcome::json(EXIT_OK, (topic.json)())),
         }
     })
 }
@@ -253,8 +257,11 @@ fn parse_output_only(
     args: &[String],
     command: Command,
 ) -> Result<ParseOutcome<OutputFormat>, CommandError> {
+    let command_name = command.get_name().to_string();
     map_parsed(parse_matches(command, args), |matches| {
-        Ok(output_format(&matches))
+        let output = output_format(&matches);
+        validate_json_field_selection(&output, &command_name, &[])?;
+        Ok(output)
     })
 }
 
@@ -319,6 +326,7 @@ fn parse_issue_list_args(args: &[String]) -> Result<ParseOutcome<IssueListReques
 fn parse_issue_view_args(args: &[String]) -> Result<ParseOutcome<IssueViewRequest>, CommandError> {
     map_parsed(parse_matches(issue_view_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "issue view", ISSUE_DETAIL_JSON_FIELDS)?;
         let repo = last_value(&matches, "repo");
         let comments = flag_count(&matches, "comments") > 0;
         let page = match last_value(&matches, "page") {
@@ -444,6 +452,7 @@ fn parse_issue_create_args(
 fn parse_pr_view_args(args: &[String]) -> Result<ParseOutcome<PrViewRequest>, CommandError> {
     map_parsed(parse_matches(pr_view_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr view", PR_DETAIL_JSON_FIELDS)?;
         let repo = last_value(&matches, "repo");
         let positionals = values(&matches, "positionals");
 
@@ -473,8 +482,10 @@ fn parse_pr_view_args(args: &[String]) -> Result<ParseOutcome<PrViewRequest>, Co
 
 fn parse_repo_view_args(args: &[String]) -> Result<ParseOutcome<RepoViewRequest>, CommandError> {
     map_parsed(parse_matches(repo_view_command(), args), |matches| {
+        let output = output_format(&matches);
+        validate_json_field_selection(&output, "repo view", REPO_VIEW_JSON_FIELDS)?;
         Ok(RepoViewRequest {
-            output: output_format(&matches),
+            output,
             repo: last_value(&matches, "repo"),
         })
     })
@@ -483,6 +494,7 @@ fn parse_repo_view_args(args: &[String]) -> Result<ParseOutcome<RepoViewRequest>
 fn parse_repo_clone_args(args: &[String]) -> Result<ParseOutcome<RepoCloneRequest>, CommandError> {
     map_parsed(parse_matches(repo_clone_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "repo clone", &[])?;
         let https_count = flag_count(&matches, "https");
         let ssh_count = flag_count(&matches, "ssh");
         let positionals = values(&matches, "positionals");
@@ -521,6 +533,7 @@ fn parse_repo_clone_args(args: &[String]) -> Result<ParseOutcome<RepoCloneReques
 fn parse_pr_comment_args(args: &[String]) -> Result<ParseOutcome<PrCommentRequest>, CommandError> {
     map_parsed(parse_matches(pr_comment_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr comment", &[])?;
         let repo = last_value(&matches, "repo");
         let body_values = values(&matches, "body");
         let body_file_values = values(&matches, "body_file");
@@ -574,6 +587,7 @@ fn parse_pr_comment_args(args: &[String]) -> Result<ParseOutcome<PrCommentReques
 fn parse_pr_list_args(args: &[String]) -> Result<ParseOutcome<PrListRequest>, CommandError> {
     map_parsed(parse_matches(pr_list_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr list", &[])?;
         let repo = last_value(&matches, "repo");
         let state = match last_value(&matches, "state") {
             Some(value) => Some(parse_pr_state(&value)?),
@@ -606,6 +620,7 @@ fn parse_pr_list_args(args: &[String]) -> Result<ParseOutcome<PrListRequest>, Co
 fn parse_pr_create_args(args: &[String]) -> Result<ParseOutcome<PrCreateRequest>, CommandError> {
     map_parsed(parse_matches(pr_create_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr create", PR_DETAIL_JSON_FIELDS)?;
         let repo = last_value(&matches, "repo");
         let head = last_value(&matches, "head");
         let base = last_value(&matches, "base");
@@ -646,6 +661,7 @@ fn parse_pr_create_args(args: &[String]) -> Result<ParseOutcome<PrCreateRequest>
 fn parse_pr_edit_args(args: &[String]) -> Result<ParseOutcome<PrEditRequest>, CommandError> {
     map_parsed(parse_matches(pr_edit_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr edit", PR_DETAIL_JSON_FIELDS)?;
         let repo = last_value(&matches, "repo");
         let title = last_value(&matches, "title");
         let state = match last_value(&matches, "state") {
@@ -725,6 +741,7 @@ fn parse_pr_checkout_args(
 ) -> Result<ParseOutcome<PrCheckoutRequest>, CommandError> {
     map_parsed(parse_matches(pr_checkout_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr checkout", &[])?;
         let repo = last_value(&matches, "repo");
         let positionals = values(&matches, "positionals");
 
@@ -755,6 +772,7 @@ fn parse_pr_checkout_args(
 fn parse_pr_status_args(args: &[String]) -> Result<ParseOutcome<PrStatusRequest>, CommandError> {
     map_parsed(parse_matches(pr_status_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr status", &[])?;
         let state = match last_value(&matches, "state") {
             Some(value) => Some(parse_pr_state(&value)?),
             None => None,
@@ -837,11 +855,47 @@ fn missing_value_flag(message: &str) -> Option<String> {
 }
 
 fn output_format(matches: &ArgMatches) -> OutputFormat {
-    if flag_count(matches, "json") > 0 {
-        OutputFormat::Json
+    let raw_json_values = values(matches, "json");
+    let json_values = raw_json_values
+        .iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+
+    if !raw_json_values.is_empty() {
+        OutputFormat::Json {
+            fields: (!json_values.is_empty()).then_some(json_values),
+        }
     } else {
         OutputFormat::Text
     }
+}
+
+fn validate_json_field_selection(
+    output: &OutputFormat,
+    command_name: &str,
+    supported_fields: &[&str],
+) -> Result<(), CommandError> {
+    let Some(fields) = output.json_fields() else {
+        return Ok(());
+    };
+
+    if supported_fields.is_empty() {
+        return Err(CommandError::usage(format!(
+            "{command_name} does not support selecting JSON fields yet"
+        )));
+    }
+
+    if let Some(field) = fields
+        .iter()
+        .find(|field| !supported_fields.contains(&field.as_str()))
+    {
+        return Err(CommandError::usage(format!(
+            "unknown JSON field for {command_name}: {field}"
+        )));
+    }
+
+    Ok(())
 }
 
 fn values(matches: &ArgMatches, id: &str) -> Vec<String> {
@@ -1277,7 +1331,14 @@ fn base_command(name: &'static str, bin_name: &'static str) -> Command {
 }
 
 fn json_flag() -> Arg {
-    count_flag("json", "json", "Output machine-readable JSON")
+    Arg::new("json")
+        .long("json")
+        .action(ArgAction::Append)
+        .num_args(0..=1)
+        .default_missing_value("")
+        .value_delimiter(',')
+        .value_name("FIELDS")
+        .help("Output machine-readable JSON")
 }
 
 fn count_flag(id: &'static str, long: &'static str, help: &'static str) -> Arg {

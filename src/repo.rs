@@ -268,20 +268,12 @@ impl From<CloneTransport> for CloneProtocol {
 
 fn render_repo_view(output: OutputFormat, view: RepoView) -> CommandOutcome {
     match output {
-        OutputFormat::Json => CommandOutcome::json(
+        OutputFormat::Json { fields } => CommandOutcome::json(
             EXIT_OK,
-            json!({
-                "source": view.source,
-                "owner": view.repository.owner,
-                "name": view.repository.name,
-                "full_name": view.repository.full_name,
-                "default_branch": view.repository.default_branch,
-                "current_branch": view.current_branch,
-                "html_url": view.repository.html_url,
-                "ssh_url": view.repository.ssh_url,
-                "clone_url": view.repository.clone_url,
-                "fork": view.repository.fork,
-            }),
+            match fields {
+                Some(fields) => repo_view_selected_json(&view, &fields),
+                None => repo_view_json(&view),
+            },
         ),
         OutputFormat::Text => CommandOutcome::text(
             EXIT_OK,
@@ -302,7 +294,7 @@ fn render_repo_view(output: OutputFormat, view: RepoView) -> CommandOutcome {
 
 fn render_repo_clone(output: OutputFormat, view: RepoCloneView) -> CommandOutcome {
     match output {
-        OutputFormat::Json => CommandOutcome::json(
+        OutputFormat::Json { .. } => CommandOutcome::json(
             EXIT_OK,
             json!({
                 "owner": view.repository.owner,
@@ -323,6 +315,38 @@ fn render_repo_clone(output: OutputFormat, view: RepoCloneView) -> CommandOutcom
             ),
         ),
     }
+}
+
+fn repo_view_json(view: &RepoView) -> serde_json::Value {
+    json!({
+        "source": view.source,
+        "owner": view.repository.owner,
+        "name": view.repository.name,
+        "full_name": view.repository.full_name,
+        "default_branch": view.repository.default_branch,
+        "current_branch": view.current_branch,
+        "html_url": view.repository.html_url,
+        "ssh_url": view.repository.ssh_url,
+        "clone_url": view.repository.clone_url,
+        "fork": view.repository.fork,
+    })
+}
+
+fn repo_view_selected_json(view: &RepoView, fields: &[String]) -> serde_json::Value {
+    let mut selected = serde_json::Map::with_capacity(fields.len());
+
+    for field in fields {
+        let value = match field.as_str() {
+            "name" => json!(view.repository.name),
+            "nameWithOwner" => json!(view.repository.full_name),
+            "url" => json!(view.repository.html_url),
+            _ => unreachable!("unsupported repository json field"),
+        };
+
+        selected.insert(field.clone(), value);
+    }
+
+    serde_json::Value::Object(selected)
 }
 
 fn resolve_clone_destination(destination: Option<&str>, repository: &Repository) -> PathBuf {
