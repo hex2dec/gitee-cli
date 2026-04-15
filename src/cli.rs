@@ -20,9 +20,76 @@ enum ParseOutcome<T> {
     Help(CommandOutcome),
 }
 
-const PR_DETAIL_JSON_FIELDS: &[&str] = &["number", "title", "url"];
-const REPO_VIEW_JSON_FIELDS: &[&str] = &["name", "nameWithOwner", "url"];
-const ISSUE_DETAIL_JSON_FIELDS: &[&str] = &["number", "title", "url"];
+const PR_DETAIL_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+    "mergedAt",
+    "isDraft",
+    "mergeable",
+    "headRefName",
+    "headRefOid",
+    "baseRefName",
+    "baseRefOid",
+];
+const PR_SUMMARY_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+    "mergedAt",
+    "isDraft",
+    "mergeable",
+    "headRefName",
+    "headRefOid",
+    "baseRefName",
+    "baseRefOid",
+];
+const REPO_VIEW_JSON_FIELDS: &[&str] = &[
+    "name",
+    "nameWithOwner",
+    "url",
+    "defaultBranch",
+    "sshUrl",
+    "cloneUrl",
+    "isFork",
+];
+const ISSUE_DETAIL_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+];
+const ISSUE_SUMMARY_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+];
+
+fn json_field_selection_for_help(path: &str) -> Option<&'static [&'static str]> {
+    match path {
+        "pr view" | "pr create" | "pr edit" => Some(PR_DETAIL_JSON_FIELDS),
+        "pr list" | "pr status" => Some(PR_SUMMARY_JSON_FIELDS),
+        "repo view" => Some(REPO_VIEW_JSON_FIELDS),
+        "issue view" => Some(ISSUE_DETAIL_JSON_FIELDS),
+        "issue list" => Some(ISSUE_SUMMARY_JSON_FIELDS),
+        _ => None,
+    }
+}
 
 pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
     if matches!(args.as_slice(), [flag] if is_version_flag(flag)) {
@@ -301,6 +368,7 @@ fn parse_auth_login_args(args: &[String]) -> Result<ParseOutcome<LoginRequest>, 
 fn parse_issue_list_args(args: &[String]) -> Result<ParseOutcome<IssueListRequest>, CommandError> {
     map_parsed(parse_matches(issue_list_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "issue list", ISSUE_SUMMARY_JSON_FIELDS)?;
         let repo = last_value(&matches, "repo");
         let state = match last_value(&matches, "state") {
             Some(value) => IssueStateFilter::parse(&value)?,
@@ -591,7 +659,7 @@ fn parse_pr_comment_args(args: &[String]) -> Result<ParseOutcome<PrCommentReques
 fn parse_pr_list_args(args: &[String]) -> Result<ParseOutcome<PrListRequest>, CommandError> {
     map_parsed(parse_matches(pr_list_command(), args), |matches| {
         let output = output_format(&matches);
-        validate_json_field_selection(&output, "pr list", &[])?;
+        validate_json_field_selection(&output, "pr list", PR_SUMMARY_JSON_FIELDS)?;
         let repo = last_value(&matches, "repo");
         let state = match last_value(&matches, "state") {
             Some(value) => Some(parse_pr_state(&value)?),
@@ -776,7 +844,7 @@ fn parse_pr_checkout_args(
 fn parse_pr_status_args(args: &[String]) -> Result<ParseOutcome<PrStatusRequest>, CommandError> {
     map_parsed(parse_matches(pr_status_command(), args), |matches| {
         let output = output_format(&matches);
-        validate_json_field_selection(&output, "pr status", &[])?;
+        validate_json_field_selection(&output, "pr status", PR_SUMMARY_JSON_FIELDS)?;
         let state = match last_value(&matches, "state") {
             Some(value) => Some(parse_pr_state(&value)?),
             None => None,
@@ -1583,6 +1651,7 @@ fn issue_list_help_json() -> serde_json::Value {
         vec![
             "gitee issue list --repo octo/demo --state open --json",
             "gitee issue list --state open --page 1 --per-page 20 --json",
+            "gitee issue list --repo octo/demo --json number,title,url",
         ],
         vec![
             "When --repo is omitted, the command can infer the repository from local git context.",
@@ -1753,6 +1822,7 @@ fn pr_view_help_json() -> serde_json::Value {
         vec![
             "gitee pr view 42 --repo octo/demo --json",
             "gitee pr view 42 --json",
+            "gitee pr view 42 --repo octo/demo --json number,title,url",
         ],
         vec![
             "When --repo is omitted, the command can infer the repository from local git context.",
@@ -1835,6 +1905,7 @@ fn pr_create_help_json() -> serde_json::Value {
         vec![
             "gitee pr create --title \"Use local head\" --base develop --body \"Built from the local branch\"",
             "gitee pr create --repo octo/demo --head feature/body-file --title \"Read body file\" --body-file ./body.md --json",
+            "gitee pr create --repo octo/demo --head feature/body-file --title \"Read body file\" --json number,title,url",
         ],
         vec![
             "--title is required.",
@@ -1890,6 +1961,7 @@ fn pr_edit_help_json() -> serde_json::Value {
         vec![
             "gitee pr edit 42 --repo octo/demo --title \"Updated title\" --json",
             "gitee pr edit 42 --body-file ./body.md --state open --ready --json",
+            "gitee pr edit 42 --repo octo/demo --json number,title,url",
         ],
         vec![
             "Provide at least one of --title, --body, --body-file, --state, --draft, or --ready.",
@@ -1956,6 +2028,7 @@ fn pr_list_help_json() -> serde_json::Value {
         vec![
             "gitee pr list --repo octo/demo --state open --author octocat --limit 10 --json",
             "gitee pr list --state open --limit 10 --json",
+            "gitee pr list --repo octo/demo --limit 10 --json number,title,url",
         ],
         vec![
             "When --repo is omitted, the command can infer the repository from local git context.",
@@ -2022,6 +2095,7 @@ fn pr_status_help_json() -> serde_json::Value {
         vec![
             "gitee pr status --state open --limit 10 --json",
             "gitee pr status --json",
+            "gitee pr status --json number,title,url",
         ],
         vec!["Requires a local git checkout and authentication."],
     )
@@ -2135,6 +2209,7 @@ fn help_command_json(
     examples: Vec<&str>,
     notes: Vec<&str>,
 ) -> serde_json::Value {
+    let json_field_selection = json_field_selection_for_help(path);
     serde_json::json!({
         "kind": "command",
         "name": name,
@@ -2142,6 +2217,8 @@ fn help_command_json(
         "summary": summary,
         "gh_equivalent": gh_equivalent,
         "supports_json": supports_json,
+        "json_field_selection": json_field_selection.is_some(),
+        "json_fields": json_field_selection,
         "auth": auth,
         "repo_flag": repo_flag,
         "repo_inference": repo_inference,

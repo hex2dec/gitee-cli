@@ -99,6 +99,193 @@ fn pr_status_summarizes_current_branch_and_current_user_in_json_output() {
 }
 
 #[test]
+fn pr_status_supports_gh_style_json_field_selection() {
+    let server = MockServer::start();
+    let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/status");
+
+    let user_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/user")
+            .query_param("access_token", "secret-token");
+        then.status(200).json_body(serde_json::json!({
+            "login": "octocat"
+        }));
+    });
+
+    let current_branch_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("access_token", "secret-token")
+            .query_param("head", "feature/status")
+            .query_param("per_page", "30");
+        then.status(200)
+            .json_body(serde_json::json!([pull_request_payload(
+                42,
+                "Branch PR",
+                "maintainer",
+                "feature/status",
+                "main"
+            )]));
+    });
+
+    let authored_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("access_token", "secret-token")
+            .query_param("author", "octocat")
+            .query_param("per_page", "30");
+        then.status(200)
+            .json_body(serde_json::json!([pull_request_payload(
+                43,
+                "Authored PR",
+                "octocat",
+                "feature/authored",
+                "main"
+            )]));
+    });
+
+    let assigned_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("access_token", "secret-token")
+            .query_param("assignee", "octocat")
+            .query_param("per_page", "30");
+        then.status(200)
+            .json_body(serde_json::json!([pull_request_payload(
+                44,
+                "Assigned PR",
+                "teammate",
+                "feature/assigned",
+                "main"
+            )]));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .current_dir(repo_dir.path())
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args(["pr", "status", "--json", "number,title,url"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["currentBranch"][0]["number"], 42);
+    assert_eq!(body["currentBranch"][0]["title"], "Branch PR");
+    assert_eq!(
+        body["currentBranch"][0]["url"],
+        "https://gitee.com/octo/demo/pulls/42"
+    );
+    assert_eq!(body["createdBy"][0]["number"], 43);
+    assert_eq!(body["createdBy"][0]["title"], "Authored PR");
+    assert_eq!(
+        body["createdBy"][0]["url"],
+        "https://gitee.com/octo/demo/pulls/43"
+    );
+    assert_eq!(body["needsReview"][0]["number"], 44);
+    assert_eq!(body["needsReview"][0]["title"], "Assigned PR");
+    assert_eq!(
+        body["needsReview"][0]["url"],
+        "https://gitee.com/octo/demo/pulls/44"
+    );
+    assert_eq!(body.as_object().unwrap().len(), 3);
+    assert_eq!(body["currentBranch"][0].as_object().unwrap().len(), 3);
+    assert_eq!(body["createdBy"][0].as_object().unwrap().len(), 3);
+    assert_eq!(body["needsReview"][0].as_object().unwrap().len(), 3);
+
+    user_mock.assert_hits(1);
+    current_branch_mock.assert_hits(1);
+    authored_mock.assert_hits(1);
+    assigned_mock.assert_hits(1);
+}
+
+#[test]
+fn pr_status_supports_extended_gh_style_json_fields() {
+    let server = MockServer::start();
+    let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/status");
+
+    let user_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/user")
+            .query_param("access_token", "secret-token");
+        then.status(200).json_body(serde_json::json!({
+            "login": "octocat"
+        }));
+    });
+
+    let current_branch_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("access_token", "secret-token")
+            .query_param("head", "feature/status")
+            .query_param("per_page", "30");
+        then.status(200)
+            .json_body(serde_json::json!([pull_request_payload(
+                42,
+                "Branch PR",
+                "maintainer",
+                "feature/status",
+                "main"
+            )]));
+    });
+
+    let authored_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("access_token", "secret-token")
+            .query_param("author", "octocat")
+            .query_param("per_page", "30");
+        then.status(200).json_body(serde_json::json!([]));
+    });
+
+    let assigned_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("access_token", "secret-token")
+            .query_param("assignee", "octocat")
+            .query_param("per_page", "30");
+        then.status(200).json_body(serde_json::json!([]));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .current_dir(repo_dir.path())
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "pr",
+            "status",
+            "--json",
+            "number,title,state,createdAt,isDraft,headRefName,baseRefName",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["currentBranch"][0]["number"], 42);
+    assert_eq!(body["currentBranch"][0]["title"], "Branch PR");
+    assert_eq!(body["currentBranch"][0]["state"], "open");
+    assert_eq!(
+        body["currentBranch"][0]["createdAt"],
+        "2026-03-20T09:00:00+08:00"
+    );
+    assert_eq!(body["currentBranch"][0]["isDraft"], false);
+    assert_eq!(body["currentBranch"][0]["headRefName"], "feature/status");
+    assert_eq!(body["currentBranch"][0]["baseRefName"], "main");
+
+    user_mock.assert_hits(1);
+    current_branch_mock.assert_hits(1);
+    authored_mock.assert_hits(1);
+    assigned_mock.assert_hits(1);
+}
+
+#[test]
 fn pr_status_requires_authentication() {
     let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/status");
     let config_dir = TempDir::new().unwrap();

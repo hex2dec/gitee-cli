@@ -117,3 +117,55 @@ fn help_json_can_describe_pr_edit() {
     assert!(flags.iter().any(|flag| flag["name"] == "--draft"));
     assert!(flags.iter().any(|flag| flag["name"] == "--ready"));
 }
+
+#[test]
+fn help_json_describes_json_field_selection_for_list_and_status_commands() {
+    let pr_list_output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "pr", "list", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(pr_list_output.status.code(), Some(0));
+    assert!(pr_list_output.stderr.is_empty());
+
+    let pr_list_body: Value = serde_json::from_slice(&pr_list_output.stdout).unwrap();
+    assert_eq!(pr_list_body["json_field_selection"], true);
+    let pr_list_fields = pr_list_body["json_fields"].as_array().unwrap();
+    assert!(pr_list_fields.iter().any(|field| field == "number"));
+    assert!(pr_list_fields.iter().any(|field| field == "title"));
+    assert!(pr_list_fields.iter().any(|field| field == "url"));
+    assert!(pr_list_fields.iter().any(|field| field == "state"));
+    assert!(pr_list_fields.iter().any(|field| field == "createdAt"));
+    assert!(pr_list_fields.iter().any(|field| field == "isDraft"));
+    let pr_list_examples = pr_list_body["examples"].as_array().unwrap();
+    assert!(
+        pr_list_examples.iter().any(|example| example
+            == "gitee pr list --repo octo/demo --limit 10 --json number,title,url")
+    );
+
+    let pr_status_output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "pr", "status", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(pr_status_output.status.code(), Some(0));
+    assert!(pr_status_output.stderr.is_empty());
+
+    let pr_status_body: Value = serde_json::from_slice(&pr_status_output.stdout).unwrap();
+    assert_eq!(pr_status_body["json_field_selection"], true);
+    let pr_status_fields = pr_status_body["json_fields"].as_array().unwrap();
+    assert!(pr_status_fields.iter().any(|field| field == "number"));
+    assert!(pr_status_fields.iter().any(|field| field == "title"));
+    assert!(pr_status_fields.iter().any(|field| field == "url"));
+    assert!(pr_status_fields.iter().any(|field| field == "state"));
+    assert!(pr_status_fields.iter().any(|field| field == "createdAt"));
+    assert!(pr_status_fields.iter().any(|field| field == "isDraft"));
+    let pr_status_examples = pr_status_body["examples"].as_array().unwrap();
+    assert!(
+        pr_status_examples
+            .iter()
+            .any(|example| example == "gitee pr status --json number,title,url")
+    );
+}

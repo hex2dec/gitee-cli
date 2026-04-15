@@ -144,6 +144,79 @@ fn pr_view_supports_gh_style_json_field_selection() {
 }
 
 #[test]
+fn pr_view_supports_extended_gh_style_json_fields() {
+    let server = MockServer::start();
+
+    let pr_mock = server.mock(|when, then| {
+        when.method(GET).path("/v5/repos/octo/demo/pulls/42");
+        then.status(200).json_body(serde_json::json!({
+            "number": 42,
+            "state": "open",
+            "title": "Fix pull request rendering",
+            "body": "Adds stable PR rendering",
+            "html_url": "https://gitee.com/octo/demo/pulls/42",
+            "draft": false,
+            "mergeable": true,
+            "created_at": "2026-03-20T09:00:00+08:00",
+            "updated_at": "2026-03-20T10:00:00+08:00",
+            "merged_at": null,
+            "user": {
+                "login": "octocat"
+            },
+            "head": {
+                "ref": "feature/pr-view",
+                "sha": "abc123",
+                "repo": {
+                    "full_name": "octo/demo"
+                }
+            },
+            "base": {
+                "ref": "main",
+                "sha": "def456",
+                "repo": {
+                    "full_name": "octo/demo"
+                }
+            }
+        }));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .args([
+            "pr",
+            "view",
+            "42",
+            "--repo",
+            "octo/demo",
+            "--json",
+            "number,title,url,state,body,createdAt,updatedAt,isDraft,mergeable,headRefName,headRefOid,baseRefName,baseRefOid",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["number"], 42);
+    assert_eq!(body["title"], "Fix pull request rendering");
+    assert_eq!(body["url"], "https://gitee.com/octo/demo/pulls/42");
+    assert_eq!(body["state"], "open");
+    assert_eq!(body["body"], "Adds stable PR rendering");
+    assert_eq!(body["createdAt"], "2026-03-20T09:00:00+08:00");
+    assert_eq!(body["updatedAt"], "2026-03-20T10:00:00+08:00");
+    assert_eq!(body["isDraft"], false);
+    assert_eq!(body["mergeable"], true);
+    assert_eq!(body["headRefName"], "feature/pr-view");
+    assert_eq!(body["headRefOid"], "abc123");
+    assert_eq!(body["baseRefName"], "main");
+    assert_eq!(body["baseRefOid"], "def456");
+
+    pr_mock.assert_hits(1);
+}
+
+#[test]
 fn pr_view_rejects_unknown_json_fields_with_a_specific_usage_error() {
     let output = Command::cargo_bin("gitee")
         .unwrap()

@@ -340,6 +340,10 @@ fn repo_view_selected_json(view: &RepoView, fields: &[String]) -> serde_json::Va
             "name" => json!(view.repository.name),
             "nameWithOwner" => json!(view.repository.full_name),
             "url" => json!(view.repository.html_url),
+            "defaultBranch" => json!(view.repository.default_branch),
+            "sshUrl" => json!(view.repository.ssh_url),
+            "cloneUrl" => json!(view.repository.clone_url),
+            "isFork" => json!(view.repository.fork),
             _ => unreachable!("unsupported repository json field"),
         };
 
