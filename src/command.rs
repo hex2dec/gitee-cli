@@ -67,8 +67,19 @@ impl CommandError {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutputFormat {
     Text,
-    Json,
+    Json { fields: Option<Vec<String>> },
+}
+
+impl OutputFormat {
+    pub fn json_fields(&self) -> Option<&[String]> {
+        match self {
+            Self::Json {
+                fields: Some(fields),
+            } => Some(fields),
+            Self::Text | Self::Json { fields: None } => None,
+        }
+    }
 }

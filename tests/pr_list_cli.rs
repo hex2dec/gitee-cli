@@ -122,6 +122,29 @@ fn pr_list_supports_filters_in_json_output() {
 }
 
 #[test]
+fn pr_list_rejects_json_field_selection_until_list_projection_is_implemented() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args([
+            "pr",
+            "list",
+            "--repo",
+            "octo/demo",
+            "--json",
+            "number,title,url",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "pr list does not support selecting JSON fields yet"
+    );
+}
+
+#[test]
 fn pr_list_supports_default_text_output() {
     let server = MockServer::start();
 

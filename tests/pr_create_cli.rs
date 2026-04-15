@@ -80,6 +80,81 @@ fn pr_create_uses_explicit_head_and_inferred_base_in_json_output() {
 }
 
 #[test]
+fn pr_create_supports_gh_style_json_field_selection() {
+    let server = MockServer::start();
+
+    let repo_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo")
+            .query_param("access_token", "secret-token");
+        then.status(200).json_body(serde_json::json!({
+            "full_name": "octo/demo",
+            "path": "demo",
+            "html_url": "https://gitee.com/octo/demo",
+            "ssh_url": "git@gitee.com:octo/demo.git",
+            "clone_url": "https://gitee.com/octo/demo.git",
+            "fork": false,
+            "default_branch": "main"
+        }));
+    });
+
+    let create_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/pulls")
+            .header("content-type", "application/json")
+            .body_contains("\"access_token\":\"secret-token\"")
+            .body_contains("\"title\":\"Add PR create\"")
+            .body_contains("\"head\":\"feature/pr-create\"")
+            .body_contains("\"base\":\"main\"")
+            .body_contains("\"body\":\"Creates the pull request\"");
+        then.status(201).json_body(pull_request_payload(
+            42,
+            "Add PR create",
+            Some("Creates the pull request"),
+            "octocat",
+            "feature/pr-create",
+            "main",
+        ));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .env("GITEE_TOKEN", "secret-token")
+        .args([
+            "pr",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--head",
+            "feature/pr-create",
+            "--title",
+            "Add PR create",
+            "--body",
+            "Creates the pull request",
+            "--json",
+            "number,url,title",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["number"], 42);
+    assert_eq!(body["title"], "Add PR create");
+    assert_eq!(body["url"], "https://gitee.com/octo/demo/pulls/42");
+
+    let object = body.as_object().unwrap();
+    assert_eq!(object.len(), 3);
+    assert!(!object.contains_key("html_url"));
+
+    repo_mock.assert_hits(1);
+    create_mock.assert_hits(1);
+}
+
+#[test]
 fn pr_create_infers_local_head_and_renders_text_output() {
     let server = MockServer::start();
     let repo_dir = git_repo_with_gitee_origin("feature/local-head");
