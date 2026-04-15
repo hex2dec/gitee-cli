@@ -13,8 +13,13 @@ Start with help instead of guessing command names or flags:
 
 ```bash
 gitee help
+gitee help --json
 gitee help pr create
 ```
+
+When you need exact command syntax, flags, examples, or preconditions, start
+with [`references/commands.md`](references/commands.md). It acts as a map and
+points to the smallest relevant reference file.
 
 ## Mental model
 
@@ -37,61 +42,20 @@ Do not assume every `gh` command exists. Confirm support with `gitee help` or
 - Prefer non-interactive write flows using flags, files, or stdin.
 - If a command fails, rerun `gitee help <topic>` before inventing flags or switching to raw HTTP.
 
-## Authentication
+## Command reference
 
-Treat authentication as a prerequisite check, not the main workflow:
+Use [`references/commands.md`](references/commands.md) as the map when you need:
 
-```bash
-gitee auth status
-```
+- the currently supported command groups and unsupported `gh` areas
+- the right group-specific reference to load next
 
-If authentication is missing, inspect the available auth commands with:
+Then load only the file relevant to the task:
 
-```bash
-gitee help auth
-```
+- [`references/auth.md`](references/auth.md) for auth prerequisite checks
+- [`references/repo.md`](references/repo.md) for repository inspection and clone
+- [`references/issue.md`](references/issue.md) for issue read/write flows
+- [`references/pr.md`](references/pr.md) for pull request workflows
 
-Do not default to performing login flows unless the task requires it.
-
-## gitee repo
-
-Use `gitee repo` for repository inspection and clone workflows:
-
-```bash
-gitee repo view
-gitee repo clone octo/demo
-```
-
-When you are outside a local checkout, use `gitee repo view --repo owner/repo`.
-
-## gitee issue
-
-Use `gitee issue` for reading and writing issues:
-
-```bash
-gitee issue list --state open
-gitee issue view I123 --comments
-gitee issue create --title "New bug" --body-file ./issue.md
-gitee issue comment I123 --body "Thanks for the report"
-```
-
-For create and comment commands, use one body source at a time: inline text or
-`--body-file`.
-Add `--repo owner/repo` only when local repo context is unavailable.
-
-## gitee pr
-
-Use `gitee pr` for pull request review and branch workflows:
-
-```bash
-gitee pr list --state open --limit 10
-gitee pr view 42
-gitee pr status
-gitee pr create --title "Use local head" --base develop --body-file ./body.md
-gitee pr comment 42 --body "Ship it"
-gitee pr checkout 42
-```
-
-`pr status` requires a local git checkout and authentication.
-`pr checkout` requires a local git checkout with an `origin` remote.
-Add `--repo owner/repo` only when local repo context is unavailable.
+Do not load every reference file by default. Read the map, load the smallest
+relevant document, and then suggest only the commands relevant to the current
+task.
