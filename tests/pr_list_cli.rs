@@ -122,26 +122,107 @@ fn pr_list_supports_filters_in_json_output() {
 }
 
 #[test]
-fn pr_list_rejects_json_field_selection_until_list_projection_is_implemented() {
+fn pr_list_supports_gh_style_json_field_selection() {
+    let server = MockServer::start();
+
+    let pr_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("per_page", "2");
+        then.status(200).json_body(serde_json::json!([
+            {
+                "number": 42,
+                "state": "open",
+                "title": "First PR",
+                "body": "First body",
+                "html_url": "https://gitee.com/octo/demo/pulls/42",
+                "draft": false,
+                "mergeable": true,
+                "created_at": "2026-03-20T09:00:00+08:00",
+                "updated_at": "2026-03-20T10:00:00+08:00",
+                "merged_at": null,
+                "user": {
+                    "login": "octocat"
+                },
+                "head": {
+                    "ref": "feature/pr-list",
+                    "sha": "abc123",
+                    "repo": {
+                        "full_name": "octo/demo"
+                    }
+                },
+                "base": {
+                    "ref": "main",
+                    "sha": "def456",
+                    "repo": {
+                        "full_name": "octo/demo"
+                    }
+                }
+            },
+            {
+                "number": 43,
+                "state": "open",
+                "title": "Second PR",
+                "body": "Second body",
+                "html_url": "https://gitee.com/octo/demo/pulls/43",
+                "draft": true,
+                "mergeable": null,
+                "created_at": "2026-03-20T11:00:00+08:00",
+                "updated_at": "2026-03-20T12:00:00+08:00",
+                "merged_at": null,
+                "user": {
+                    "login": "octocat"
+                },
+                "head": {
+                    "ref": "feature/pr-list",
+                    "sha": "abc124",
+                    "repo": {
+                        "full_name": "octo/demo"
+                    }
+                },
+                "base": {
+                    "ref": "main",
+                    "sha": "def457",
+                    "repo": {
+                        "full_name": "octo/demo"
+                    }
+                }
+            }
+        ]));
+    });
+
     let output = Command::cargo_bin("gitee")
         .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
         .args([
             "pr",
             "list",
             "--repo",
             "octo/demo",
+            "--limit",
+            "2",
             "--json",
             "number,title,url",
         ])
         .output()
         .unwrap();
 
-    assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr).trim(),
-        "pr list does not support selecting JSON fields yet"
-    );
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = body.as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["number"], 42);
+    assert_eq!(items[0]["title"], "First PR");
+    assert_eq!(items[0]["url"], "https://gitee.com/octo/demo/pulls/42");
+    assert_eq!(items[1]["number"], 43);
+    assert_eq!(items[1]["title"], "Second PR");
+    assert_eq!(items[1]["url"], "https://gitee.com/octo/demo/pulls/43");
+    assert_eq!(items[0].as_object().unwrap().len(), 3);
+    assert_eq!(items[1].as_object().unwrap().len(), 3);
+
+    pr_mock.assert_hits(1);
 }
 
 #[test]

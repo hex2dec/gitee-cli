@@ -676,14 +676,22 @@ fn render_pr_list(
     pull_requests: Vec<PullRequest>,
 ) -> CommandOutcome {
     match output {
-        OutputFormat::Json { .. } => CommandOutcome::json(
+        OutputFormat::Json { fields } => CommandOutcome::json(
             EXIT_OK,
-            json!({
-                "repository": format!("{}/{}", repo.owner, repo.name),
-                "source": repo.source,
-                "count": pull_requests.len(),
-                "pull_requests": pull_requests.iter().map(pr_summary_json).collect::<Vec<_>>(),
-            }),
+            match fields {
+                Some(fields) => serde_json::Value::Array(
+                    pull_requests
+                        .iter()
+                        .map(|pull_request| pr_selected_json(pull_request, &fields))
+                        .collect(),
+                ),
+                None => json!({
+                    "repository": format!("{}/{}", repo.owner, repo.name),
+                    "source": repo.source,
+                    "count": pull_requests.len(),
+                    "pull_requests": pull_requests.iter().map(pr_summary_json).collect::<Vec<_>>(),
+                }),
+            },
         ),
         OutputFormat::Text => CommandOutcome::text(EXIT_OK, render_pr_list_text(&pull_requests)),
     }
@@ -699,17 +707,24 @@ fn render_pr_status(
     assigned_prs: Vec<PullRequest>,
 ) -> CommandOutcome {
     match output {
-        OutputFormat::Json { .. } => CommandOutcome::json(
+        OutputFormat::Json { fields } => CommandOutcome::json(
             EXIT_OK,
-            json!({
-                "repository": format!("{}/{}", repo.owner, repo.name),
-                "source": repo.source,
-                "current_user": current_user,
-                "current_branch": current_branch,
-                "current_branch_prs": current_branch_prs.iter().map(pr_summary_json).collect::<Vec<_>>(),
-                "authored_prs": authored_prs.iter().map(pr_summary_json).collect::<Vec<_>>(),
-                "assigned_prs": assigned_prs.iter().map(pr_summary_json).collect::<Vec<_>>(),
-            }),
+            match fields {
+                Some(fields) => json!({
+                    "currentBranch": current_branch_prs.iter().map(|pull_request| pr_selected_json(pull_request, &fields)).collect::<Vec<_>>(),
+                    "createdBy": authored_prs.iter().map(|pull_request| pr_selected_json(pull_request, &fields)).collect::<Vec<_>>(),
+                    "needsReview": assigned_prs.iter().map(|pull_request| pr_selected_json(pull_request, &fields)).collect::<Vec<_>>(),
+                }),
+                None => json!({
+                    "repository": format!("{}/{}", repo.owner, repo.name),
+                    "source": repo.source,
+                    "current_user": current_user,
+                    "current_branch": current_branch,
+                    "current_branch_prs": current_branch_prs.iter().map(pr_summary_json).collect::<Vec<_>>(),
+                    "authored_prs": authored_prs.iter().map(pr_summary_json).collect::<Vec<_>>(),
+                    "assigned_prs": assigned_prs.iter().map(pr_summary_json).collect::<Vec<_>>(),
+                }),
+            },
         ),
         OutputFormat::Text => CommandOutcome::text(
             EXIT_OK,

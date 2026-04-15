@@ -82,6 +82,73 @@ fn issue_list_uses_local_repo_context_and_reports_stable_json_output() {
 }
 
 #[test]
+fn issue_list_supports_gh_style_json_field_selection() {
+    let server = MockServer::start();
+    let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/issues");
+
+    let issues_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/issues")
+            .query_param("state", "open")
+            .query_param("page", "1")
+            .query_param("per_page", "20");
+        then.status(200).json_body(serde_json::json!([
+            {
+                "number": "I123",
+                "title": "Fix panic in issue sync",
+                "state": "open",
+                "body": "panic body",
+                "comments": 2,
+                "html_url": "https://gitee.com/octo/demo/issues/I123",
+                "created_at": "2026-03-20T10:00:00Z",
+                "updated_at": "2026-03-20T12:00:00Z",
+                "user": {
+                    "login": "alice"
+                }
+            },
+            {
+                "number": "I124",
+                "title": "Fix issue search pagination",
+                "state": "open",
+                "body": "pagination body",
+                "comments": 0,
+                "html_url": "https://gitee.com/octo/demo/issues/I124",
+                "created_at": "2026-03-20T13:00:00Z",
+                "updated_at": "2026-03-20T14:00:00Z",
+                "user": {
+                    "login": "bob"
+                }
+            }
+        ]));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .current_dir(repo_dir.path())
+        .env("GITEE_BASE_URL", server.base_url())
+        .args(["issue", "list", "--json", "number,title,url"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = body.as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["number"], "I123");
+    assert_eq!(items[0]["title"], "Fix panic in issue sync");
+    assert_eq!(items[0]["url"], "https://gitee.com/octo/demo/issues/I123");
+    assert_eq!(items[1]["number"], "I124");
+    assert_eq!(items[1]["title"], "Fix issue search pagination");
+    assert_eq!(items[1]["url"], "https://gitee.com/octo/demo/issues/I124");
+    assert_eq!(items[0].as_object().unwrap().len(), 3);
+    assert_eq!(items[1].as_object().unwrap().len(), 3);
+
+    issues_mock.assert_hits(1);
+}
+
+#[test]
 fn issue_create_uses_local_repo_context_and_reports_stable_json_output() {
     let server = MockServer::start();
     let repo_dir = git_repo_with_remote("https://gitee.com/octo/demo.git", "feature/issues");

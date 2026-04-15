@@ -327,29 +327,26 @@ impl RepoSlug {
 
 fn render_issue_list(output: OutputFormat, view: IssueListView) -> CommandOutcome {
     match output {
-        OutputFormat::Json { .. } => CommandOutcome::json(
+        OutputFormat::Json { fields } => CommandOutcome::json(
             EXIT_OK,
-            json!({
-                "source": view.source,
-                "owner": view.owner,
-                "name": view.name,
-                "state": view.state,
-                "search": view.search,
-                "page": view.page,
-                "per_page": view.per_page,
-                "issues": view.issues.iter().map(|issue| {
-                    json!({
-                        "number": issue.number,
-                        "title": issue.title,
-                        "state": issue.state,
-                        "author": issue.author,
-                        "comments": issue.comments,
-                        "html_url": issue.html_url,
-                        "created_at": issue.created_at,
-                        "updated_at": issue.updated_at,
-                    })
-                }).collect::<Vec<_>>(),
-            }),
+            match fields {
+                Some(fields) => serde_json::Value::Array(
+                    view.issues
+                        .iter()
+                        .map(|issue| issue_selected_json(issue, &fields))
+                        .collect(),
+                ),
+                None => json!({
+                    "source": view.source,
+                    "owner": view.owner,
+                    "name": view.name,
+                    "state": view.state,
+                    "search": view.search,
+                    "page": view.page,
+                    "per_page": view.per_page,
+                    "issues": view.issues.iter().map(issue_summary_json).collect::<Vec<_>>(),
+                }),
+            },
         ),
         OutputFormat::Text => {
             let mut lines = vec![
@@ -375,6 +372,36 @@ fn render_issue_list(output: OutputFormat, view: IssueListView) -> CommandOutcom
             CommandOutcome::text(EXIT_OK, lines.join("\n"))
         }
     }
+}
+
+fn issue_summary_json(issue: &Issue) -> serde_json::Value {
+    json!({
+        "number": issue.number,
+        "title": issue.title,
+        "state": issue.state,
+        "author": issue.author,
+        "comments": issue.comments,
+        "html_url": issue.html_url,
+        "created_at": issue.created_at,
+        "updated_at": issue.updated_at,
+    })
+}
+
+fn issue_selected_json(issue: &Issue, fields: &[String]) -> serde_json::Value {
+    let mut selected = serde_json::Map::with_capacity(fields.len());
+
+    for field in fields {
+        let value = match field.as_str() {
+            "number" => json!(issue.number),
+            "title" => json!(issue.title),
+            "url" => json!(issue.html_url),
+            _ => unreachable!("unsupported issue json field"),
+        };
+
+        selected.insert(field.clone(), value);
+    }
+
+    serde_json::Value::Object(selected)
 }
 
 fn render_issue_view(output: OutputFormat, view: IssueView) -> CommandOutcome {
