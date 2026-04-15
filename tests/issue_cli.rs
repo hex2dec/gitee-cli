@@ -270,6 +270,31 @@ fn issue_create_uses_local_repo_context_and_reports_stable_json_output() {
 }
 
 #[test]
+fn issue_create_rejects_json_field_selection_with_a_specific_usage_error() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args([
+            "issue",
+            "create",
+            "--repo",
+            "octo/demo",
+            "--title",
+            "Add issue create",
+            "--json",
+            "number",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "issue create does not support selecting JSON fields yet"
+    );
+}
+
+#[test]
 fn issue_create_uses_explicit_repo_and_renders_text_output() {
     let server = MockServer::start();
 
@@ -977,6 +1002,32 @@ fn issue_comment_rejects_removed_body_stdin_flag_as_unsupported() {
     assert_eq!(
         String::from_utf8_lossy(&output.stderr).trim(),
         "unsupported command"
+    );
+}
+
+#[test]
+fn issue_comment_rejects_json_field_selection_with_a_specific_usage_error() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args([
+            "issue",
+            "comment",
+            "I123",
+            "--repo",
+            "octo/demo",
+            "--body",
+            "Posted from flag",
+            "--json",
+            "number",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "issue comment does not support selecting JSON fields yet"
     );
 }
 

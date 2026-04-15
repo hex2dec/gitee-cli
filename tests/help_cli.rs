@@ -69,6 +69,41 @@ fn help_can_render_text_for_a_nested_command_topic() {
 }
 
 #[test]
+fn help_text_describes_json_usage_per_command() {
+    let pr_list_output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "pr", "list"])
+        .output()
+        .unwrap();
+
+    assert_eq!(pr_list_output.status.code(), Some(0));
+    assert!(pr_list_output.stderr.is_empty());
+    let pr_list_stdout = String::from_utf8_lossy(&pr_list_output.stdout);
+    assert!(pr_list_stdout.contains("--json [<FIELDS>]"));
+
+    for topic in [
+        ["help", "issue", "create"],
+        ["help", "issue", "comment"],
+        ["help", "pr", "comment"],
+        ["help", "pr", "checkout"],
+        ["help", "repo", "clone"],
+    ] {
+        let output = Command::cargo_bin("gitee")
+            .unwrap()
+            .args(topic)
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(0));
+        assert!(output.stderr.is_empty());
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("--json"));
+        assert!(!stdout.contains("--json [<FIELDS>]"));
+    }
+}
+
+#[test]
 fn help_json_can_describe_a_single_nested_command() {
     let output = Command::cargo_bin("gitee")
         .unwrap()
