@@ -437,6 +437,7 @@ fn parse_issue_comment_args(
 ) -> Result<ParseOutcome<IssueCommentRequest>, CommandError> {
     map_parsed(parse_matches(issue_comment_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "issue comment", &[])?;
         let repo = last_value(&matches, "repo");
         let body_values = values(&matches, "body");
         let body_file_values = values(&matches, "body_file");
@@ -488,6 +489,7 @@ fn parse_issue_create_args(
 ) -> Result<ParseOutcome<IssueCreateRequest>, CommandError> {
     map_parsed(parse_matches(issue_create_command(), args), |matches| {
         let output = output_format(&matches);
+        validate_json_field_selection(&output, "issue create", &[])?;
         let repo = last_value(&matches, "repo");
         let title = last_value(&matches, "title");
         let body_values = values(&matches, "body");
@@ -986,22 +988,33 @@ fn flag_count(matches: &ArgMatches, id: &str) -> usize {
 }
 
 fn render_help(mut command: Command) -> CommandOutcome {
+    let supports_json_field_selection = help_command_supports_json_field_selection(&command);
     let mut buffer = Vec::new();
     command
         .write_long_help(&mut buffer)
         .expect("writing clap help should succeed");
 
-    CommandOutcome::text(
-        EXIT_OK,
-        String::from_utf8(buffer)
-            .expect("clap help should be utf-8")
-            .trim_end()
-            .to_string(),
-    )
+    let body = String::from_utf8(buffer)
+        .expect("clap help should be utf-8")
+        .trim_end()
+        .to_string();
+    let body = if supports_json_field_selection {
+        body
+    } else {
+        body.replace("--json [<FIELDS>]", "--json")
+    };
+
+    CommandOutcome::text(EXIT_OK, body)
 }
 
 fn render_version() -> CommandOutcome {
     CommandOutcome::text(EXIT_OK, format!("gitee {}", env!("CARGO_PKG_VERSION")))
+}
+
+fn help_command_supports_json_field_selection(command: &Command) -> bool {
+    let path = command.get_bin_name().unwrap_or(command.get_name());
+    let path = path.strip_prefix("gitee ").unwrap_or(path);
+    json_field_selection_for_help(path).is_some()
 }
 
 fn is_help_flag(arg: &str) -> bool {
