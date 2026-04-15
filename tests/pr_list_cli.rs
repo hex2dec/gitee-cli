@@ -226,6 +226,79 @@ fn pr_list_supports_gh_style_json_field_selection() {
 }
 
 #[test]
+fn pr_list_supports_extended_gh_style_json_fields() {
+    let server = MockServer::start();
+
+    let pr_mock = server.mock(|when, then| {
+        when.method(GET)
+            .path("/v5/repos/octo/demo/pulls")
+            .query_param("per_page", "2");
+        then.status(200).json_body(serde_json::json!([
+            {
+                "number": 42,
+                "state": "open",
+                "title": "First PR",
+                "body": "First body",
+                "html_url": "https://gitee.com/octo/demo/pulls/42",
+                "draft": false,
+                "mergeable": true,
+                "created_at": "2026-03-20T09:00:00+08:00",
+                "updated_at": "2026-03-20T10:00:00+08:00",
+                "merged_at": null,
+                "user": {
+                    "login": "octocat"
+                },
+                "head": {
+                    "ref": "feature/pr-list",
+                    "sha": "abc123",
+                    "repo": {
+                        "full_name": "octo/demo"
+                    }
+                },
+                "base": {
+                    "ref": "main",
+                    "sha": "def456",
+                    "repo": {
+                        "full_name": "octo/demo"
+                    }
+                }
+            }
+        ]));
+    });
+
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .env("GITEE_BASE_URL", server.base_url())
+        .args([
+            "pr",
+            "list",
+            "--repo",
+            "octo/demo",
+            "--limit",
+            "2",
+            "--json",
+            "number,title,url,state,createdAt,isDraft,headRefName",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = body.as_array().unwrap();
+    assert_eq!(items[0]["number"], 42);
+    assert_eq!(items[0]["title"], "First PR");
+    assert_eq!(items[0]["url"], "https://gitee.com/octo/demo/pulls/42");
+    assert_eq!(items[0]["state"], "open");
+    assert_eq!(items[0]["createdAt"], "2026-03-20T09:00:00+08:00");
+    assert_eq!(items[0]["isDraft"], false);
+    assert_eq!(items[0]["headRefName"], "feature/pr-list");
+
+    pr_mock.assert_hits(1);
+}
+
+#[test]
 fn pr_list_supports_default_text_output() {
     let server = MockServer::start();
 

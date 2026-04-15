@@ -395,6 +395,10 @@ fn issue_selected_json(issue: &Issue, fields: &[String]) -> serde_json::Value {
             "number" => json!(issue.number),
             "title" => json!(issue.title),
             "url" => json!(issue.html_url),
+            "state" => json!(issue.state),
+            "body" => json!(issue.body),
+            "createdAt" => json!(issue.created_at),
+            "updatedAt" => json!(issue.updated_at),
             _ => unreachable!("unsupported issue json field"),
         };
 
@@ -527,6 +531,10 @@ fn issue_view_selected_json(view: &IssueView, fields: &[String]) -> serde_json::
             "number" => json!(view.issue.number),
             "title" => json!(view.issue.title),
             "url" => json!(view.issue.html_url),
+            "state" => json!(view.issue.state),
+            "body" => json!(view.issue.body),
+            "createdAt" => json!(view.issue.created_at),
+            "updatedAt" => json!(view.issue.updated_at),
             _ => unreachable!("unsupported issue json field"),
         };
 

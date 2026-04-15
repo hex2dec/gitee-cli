@@ -131,10 +131,13 @@ fn help_json_describes_json_field_selection_for_list_and_status_commands() {
 
     let pr_list_body: Value = serde_json::from_slice(&pr_list_output.stdout).unwrap();
     assert_eq!(pr_list_body["json_field_selection"], true);
-    assert_eq!(
-        pr_list_body["json_fields"],
-        serde_json::json!(["number", "title", "url"])
-    );
+    let pr_list_fields = pr_list_body["json_fields"].as_array().unwrap();
+    assert!(pr_list_fields.iter().any(|field| field == "number"));
+    assert!(pr_list_fields.iter().any(|field| field == "title"));
+    assert!(pr_list_fields.iter().any(|field| field == "url"));
+    assert!(pr_list_fields.iter().any(|field| field == "state"));
+    assert!(pr_list_fields.iter().any(|field| field == "createdAt"));
+    assert!(pr_list_fields.iter().any(|field| field == "isDraft"));
     let pr_list_examples = pr_list_body["examples"].as_array().unwrap();
     assert!(
         pr_list_examples.iter().any(|example| example
@@ -152,10 +155,13 @@ fn help_json_describes_json_field_selection_for_list_and_status_commands() {
 
     let pr_status_body: Value = serde_json::from_slice(&pr_status_output.stdout).unwrap();
     assert_eq!(pr_status_body["json_field_selection"], true);
-    assert_eq!(
-        pr_status_body["json_fields"],
-        serde_json::json!(["number", "title", "url"])
-    );
+    let pr_status_fields = pr_status_body["json_fields"].as_array().unwrap();
+    assert!(pr_status_fields.iter().any(|field| field == "number"));
+    assert!(pr_status_fields.iter().any(|field| field == "title"));
+    assert!(pr_status_fields.iter().any(|field| field == "url"));
+    assert!(pr_status_fields.iter().any(|field| field == "state"));
+    assert!(pr_status_fields.iter().any(|field| field == "createdAt"));
+    assert!(pr_status_fields.iter().any(|field| field == "isDraft"));
     let pr_status_examples = pr_status_body["examples"].as_array().unwrap();
     assert!(
         pr_status_examples

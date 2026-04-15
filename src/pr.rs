@@ -808,6 +808,17 @@ fn pr_selected_json(pull_request: &PullRequest, fields: &[String]) -> serde_json
             "number" => json!(pull_request.number),
             "title" => json!(pull_request.title),
             "url" => json!(pull_request.html_url),
+            "state" => json!(pull_request.state),
+            "body" => json!(pull_request.body),
+            "createdAt" => json!(pull_request.created_at),
+            "updatedAt" => json!(pull_request.updated_at),
+            "mergedAt" => json!(pull_request.merged_at),
+            "isDraft" => json!(pull_request.draft),
+            "mergeable" => json!(pull_request.mergeable),
+            "headRefName" => json!(pull_request.head.r#ref),
+            "headRefOid" => json!(pull_request.head.sha),
+            "baseRefName" => json!(pull_request.base.r#ref),
+            "baseRefOid" => json!(pull_request.base.sha),
             _ => unreachable!("unsupported pull request json field"),
         };
 

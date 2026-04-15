@@ -20,11 +20,65 @@ enum ParseOutcome<T> {
     Help(CommandOutcome),
 }
 
-const PR_DETAIL_JSON_FIELDS: &[&str] = &["number", "title", "url"];
-const PR_SUMMARY_JSON_FIELDS: &[&str] = &["number", "title", "url"];
-const REPO_VIEW_JSON_FIELDS: &[&str] = &["name", "nameWithOwner", "url"];
-const ISSUE_DETAIL_JSON_FIELDS: &[&str] = &["number", "title", "url"];
-const ISSUE_SUMMARY_JSON_FIELDS: &[&str] = &["number", "title", "url"];
+const PR_DETAIL_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+    "mergedAt",
+    "isDraft",
+    "mergeable",
+    "headRefName",
+    "headRefOid",
+    "baseRefName",
+    "baseRefOid",
+];
+const PR_SUMMARY_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+    "mergedAt",
+    "isDraft",
+    "mergeable",
+    "headRefName",
+    "headRefOid",
+    "baseRefName",
+    "baseRefOid",
+];
+const REPO_VIEW_JSON_FIELDS: &[&str] = &[
+    "name",
+    "nameWithOwner",
+    "url",
+    "defaultBranch",
+    "sshUrl",
+    "cloneUrl",
+    "isFork",
+];
+const ISSUE_DETAIL_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+];
+const ISSUE_SUMMARY_JSON_FIELDS: &[&str] = &[
+    "number",
+    "title",
+    "url",
+    "state",
+    "body",
+    "createdAt",
+    "updatedAt",
+];
 
 fn json_field_selection_for_help(path: &str) -> Option<&'static [&'static str]> {
     match path {
