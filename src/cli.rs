@@ -21,6 +21,10 @@ enum ParseOutcome<T> {
 }
 
 pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
+    if matches!(args.as_slice(), [flag] if is_version_flag(flag)) {
+        return Ok(render_version());
+    }
+
     let Some((command, rest)) = args.split_first() else {
         return Err(CommandError::usage("missing command"));
     };
@@ -874,13 +878,22 @@ fn render_help(mut command: Command) -> CommandOutcome {
     )
 }
 
+fn render_version() -> CommandOutcome {
+    CommandOutcome::text(EXIT_OK, format!("gitee {}", env!("CARGO_PKG_VERSION")))
+}
+
 fn is_help_flag(arg: &str) -> bool {
     matches!(arg, "--help" | "-h")
+}
+
+fn is_version_flag(arg: &str) -> bool {
+    matches!(arg, "--version" | "-V")
 }
 
 fn root_help_command() -> Command {
     base_command("gitee", "gitee")
         .about("Agent-first CLI for gitee.com")
+        .arg(version_flag())
         .after_help(
             "Examples:\n  gitee auth status --json\n  gitee repo view --repo octo/demo --json\n  gitee help --json\n\nAgent discovery:\n  Use `gitee help --json` to inspect commands, flags, examples, and gh-style equivalents.",
         )
@@ -1278,6 +1291,14 @@ fn base_command(name: &'static str, bin_name: &'static str) -> Command {
 
 fn json_flag() -> Arg {
     count_flag("json", "json", "Output machine-readable JSON")
+}
+
+fn version_flag() -> Arg {
+    Arg::new("version")
+        .short('V')
+        .long("version")
+        .action(ArgAction::SetTrue)
+        .help("Print version")
 }
 
 fn count_flag(id: &'static str, long: &'static str, help: &'static str) -> Arg {
