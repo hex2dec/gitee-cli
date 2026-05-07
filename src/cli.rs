@@ -10,8 +10,8 @@ use crate::issue::{
     IssueStateFilter, IssueViewRequest,
 };
 use crate::pr::{
-    PrCheckoutRequest, PrCommentRequest, PrCreateRequest, PrEditRequest, PrListRequest, PrService,
-    PrStatusRequest, PrTextSource, PrViewRequest,
+    PrCheckoutRequest, PrCommentRequest, PrCreateRequest, PrEditRequest, PrListRequest,
+    PrMergeMethod, PrMergeRequest, PrService, PrStatusRequest, PrTextSource, PrViewRequest,
 };
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
 
@@ -178,6 +178,7 @@ fn run_pr(args: &[String]) -> Result<CommandOutcome, CommandError> {
         "create" => execute_parsed(parse_pr_create_args(rest), |request| pr.create(request)),
         "edit" => execute_parsed(parse_pr_edit_args(rest), |request| pr.edit(request)),
         "list" => execute_parsed(parse_pr_list_args(rest), |request| pr.list(request)),
+        "merge" => execute_parsed(parse_pr_merge_args(rest), |request| pr.merge(request)),
         "status" => execute_parsed(parse_pr_status_args(rest), |request| pr.status(request)),
         "view" => execute_parsed(parse_pr_view_args(rest), |request| pr.view(request)),
         _ => Err(CommandError::usage("unsupported command")),
@@ -289,6 +290,10 @@ fn resolve_help_topic(path: &[String]) -> Option<HelpTopic> {
         ["pr", "list"] => Some(HelpTopic {
             text_command: pr_list_command,
             json: pr_list_help_json,
+        }),
+        ["pr", "merge"] => Some(HelpTopic {
+            text_command: pr_merge_command,
+            json: pr_merge_help_json,
         }),
         ["pr", "status"] => Some(HelpTopic {
             text_command: pr_status_command,
@@ -843,6 +848,55 @@ fn parse_pr_checkout_args(
     })
 }
 
+fn parse_pr_merge_args(args: &[String]) -> Result<ParseOutcome<PrMergeRequest>, CommandError> {
+    map_parsed(parse_matches(pr_merge_command(), args), |matches| {
+        let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr merge", &[])?;
+        let repo = last_value(&matches, "repo");
+        let merge_count = flag_count(&matches, "merge");
+        let squash_count = flag_count(&matches, "squash");
+        let rebase_count = flag_count(&matches, "rebase");
+        let positionals = values(&matches, "positionals");
+
+        let Some(number) = positionals.first() else {
+            return Err(CommandError::usage(
+                "pr merge requires a pull request number",
+            ));
+        };
+
+        if positionals.len() > 1 {
+            return Err(CommandError::usage(
+                "pr merge accepts exactly one pull request number",
+            ));
+        }
+
+        if merge_count + squash_count + rebase_count > 1 {
+            return Err(CommandError::usage(
+                "provide only one of --merge, --squash, or --rebase",
+            ));
+        }
+
+        let number = number.parse::<u64>().map_err(|_| {
+            CommandError::usage("invalid pull request number: expected a positive integer")
+        })?;
+
+        let merge_method = if squash_count == 1 {
+            PrMergeMethod::Squash
+        } else if rebase_count == 1 {
+            PrMergeMethod::Rebase
+        } else {
+            PrMergeMethod::Merge
+        };
+
+        Ok(PrMergeRequest {
+            output,
+            repo,
+            number,
+            merge_method,
+        })
+    })
+}
+
 fn parse_pr_status_args(args: &[String]) -> Result<ParseOutcome<PrStatusRequest>, CommandError> {
     map_parsed(parse_matches(pr_status_command(), args), |matches| {
         let output = output_format(&matches);
@@ -1057,12 +1111,13 @@ fn issue_help_command() -> Command {
 
 fn pr_help_command() -> Command {
     base_command("pr", "gitee pr")
-        .about("View, create, edit, comment on, and check out pull requests")
+        .about("View, create, edit, merge, comment on, and check out pull requests")
         .subcommand(pr_checkout_command())
         .subcommand(pr_comment_command())
         .subcommand(pr_create_command())
         .subcommand(pr_edit_command())
         .subcommand(pr_list_command())
+        .subcommand(pr_merge_command())
         .subcommand(pr_status_command())
         .subcommand(pr_view_command())
 }
@@ -1370,6 +1425,25 @@ fn pr_edit_command() -> Command {
             "ready",
             "ready",
             "Mark the pull request as ready",
+        ))
+        .arg(positionals_arg("positionals", "PR", "Pull request number"))
+}
+
+fn pr_merge_command() -> Command {
+    base_command("merge", "gitee pr merge")
+        .about("Merge a pull request")
+        .arg(json_flag())
+        .arg(repo_option())
+        .arg(count_flag("merge", "merge", "Merge the pull request"))
+        .arg(count_flag(
+            "squash",
+            "squash",
+            "Squash and merge the pull request",
+        ))
+        .arg(count_flag(
+            "rebase",
+            "rebase",
+            "Rebase and merge the pull request",
         ))
         .arg(positionals_arg("positionals", "PR", "Pull request number"))
 }
@@ -1801,7 +1875,7 @@ fn pr_help_json() -> serde_json::Value {
     help_group_json(
         "pr",
         "pr",
-        "View, create, edit, comment on, and check out pull requests",
+        "View, create, edit, merge, comment on, and check out pull requests",
         "gh pr",
         vec![
             pr_checkout_help_json(),
@@ -1809,6 +1883,7 @@ fn pr_help_json() -> serde_json::Value {
             pr_create_help_json(),
             pr_edit_help_json(),
             pr_list_help_json(),
+            pr_merge_help_json(),
             pr_status_help_json(),
             pr_view_help_json(),
         ],
@@ -2044,6 +2119,38 @@ fn pr_list_help_json() -> serde_json::Value {
             "gitee pr list --repo octo/demo --limit 10 --json number,title,url",
         ],
         vec![
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_merge_help_json() -> serde_json::Value {
+    help_command_json(
+        "merge",
+        "pr merge",
+        "Merge a pull request",
+        "gh pr merge",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json("--merge", None, "Merge the pull request", false),
+            help_option_json("--squash", None, "Squash and merge the pull request", false),
+            help_option_json("--rebase", None, "Rebase and merge the pull request", false),
+        ],
+        vec![help_argument_json("pr", "PR", "Pull request number", true)],
+        Vec::new(),
+        vec![
+            "gitee pr merge 42 --repo octo/demo --json",
+            "gitee pr merge 42 --squash --json",
+        ],
+        vec![
+            "Provide at most one of --merge, --squash, or --rebase.",
+            "When no merge strategy flag is provided, the command uses the default merge strategy.",
             "When --repo is omitted, the command can infer the repository from local git context.",
         ],
     )

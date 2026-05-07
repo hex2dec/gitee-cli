@@ -25,6 +25,10 @@ pub struct CreatePullRequest<'a> {
     pub body: Option<&'a str>,
 }
 
+pub struct MergePullRequest<'a> {
+    pub merge_method: &'a str,
+}
+
 pub struct UpdatePullRequest<'a> {
     pub title: Option<&'a str>,
     pub body: Option<&'a str>,
@@ -40,6 +44,11 @@ struct CreatePullRequestPayload<'a> {
     base: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     body: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+struct MergePullRequestPayload<'a> {
+    merge_method: &'a str,
 }
 
 #[derive(Deserialize)]
@@ -618,6 +627,54 @@ impl GiteeClient {
 
         Err(PullRequestError::UnexpectedStatus(status))
     }
+
+    pub fn merge_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        token: &str,
+        request: &MergePullRequest<'_>,
+    ) -> Result<PullRequestMergeResult, PullRequestError> {
+        let response = self
+            .client
+            .put(format!(
+                "{}/v5/repos/{owner}/{repo}/pulls/{number}/merge",
+                self.base_url
+            ))
+            .query(&[("access_token", token)])
+            .json(&MergePullRequestPayload {
+                merge_method: request.merge_method,
+            })
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            let result = response
+                .json::<PullRequestMergeResponse>()
+                .map_err(PullRequestError::Transport)?;
+            return Ok(result.into_pull_request_merge_result());
+        }
+
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if status == 401 {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if status == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
+    }
 }
 
 fn resolve_base_url(value: Option<String>) -> String {
@@ -731,6 +788,12 @@ pub struct PullRequestComment {
     pub comment_type: String,
 }
 
+pub struct PullRequestMergeResult {
+    pub sha: Option<String>,
+    pub merged: bool,
+    pub message: String,
+}
+
 pub struct PullRequestBranch {
     pub r#ref: String,
     pub sha: String,
@@ -826,6 +889,16 @@ struct PullRequestCommentResponse {
     #[serde(default)]
     comment_type: Option<String>,
     user: PullRequestUserResponse,
+}
+
+#[derive(Deserialize)]
+struct PullRequestMergeResponse {
+    #[serde(default)]
+    sha: Option<String>,
+    #[serde(default)]
+    merged: bool,
+    #[serde(default)]
+    message: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -963,6 +1036,16 @@ impl PullRequestCommentResponse {
             comment_type: self
                 .comment_type
                 .unwrap_or_else(|| "pr_comment".to_string()),
+        }
+    }
+}
+
+impl PullRequestMergeResponse {
+    fn into_pull_request_merge_result(self) -> PullRequestMergeResult {
+        PullRequestMergeResult {
+            sha: self.sha,
+            merged: self.merged,
+            message: self.message.unwrap_or_default(),
         }
     }
 }

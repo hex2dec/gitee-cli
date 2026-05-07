@@ -7,8 +7,9 @@ use serde_json::json;
 use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
 use crate::gitee_api::{
-    CreatePullRequest, CreatePullRequestComment, GiteeClient, PullRequest, PullRequestComment,
-    PullRequestError, PullRequestListFilters, RepoError, UpdatePullRequest,
+    CreatePullRequest, CreatePullRequestComment, GiteeClient, MergePullRequest, PullRequest,
+    PullRequestComment, PullRequestError, PullRequestListFilters, PullRequestMergeResult,
+    RepoError, UpdatePullRequest,
 };
 use crate::repo_context::infer_repo_context;
 
@@ -156,6 +157,35 @@ impl PrService {
             self.update_pull_request_with_fallback(&repo, request.number, &token, &update)?;
 
         Ok(render_pr_view(request.output, pull_request))
+    }
+
+    pub fn merge(&self, request: PrMergeRequest) -> Result<CommandOutcome, CommandError> {
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: crate::command::EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for pr merge".to_string()),
+            })?
+            .token;
+
+        let repo = resolve_repo(request.repo.as_deref())?;
+        let (target_repo, result) = self.merge_pull_request_with_fallback(
+            &repo,
+            request.number,
+            &token,
+            request.merge_method.as_api_value(),
+        )?;
+
+        Ok(render_pr_merge(
+            request.output,
+            &target_repo,
+            request.number,
+            request.merge_method,
+            result,
+        ))
     }
 
     pub fn checkout(&self, request: PrCheckoutRequest) -> Result<CommandOutcome, CommandError> {
@@ -387,6 +417,43 @@ impl PrService {
         }
     }
 
+    fn merge_pull_request_with_fallback(
+        &self,
+        repo: &ResolvedRepo,
+        number: u64,
+        token: &str,
+        merge_method: &str,
+    ) -> Result<(ResolvedRepo, PullRequestMergeResult), CommandError> {
+        let request = MergePullRequest { merge_method };
+
+        match self
+            .client
+            .merge_pull_request(&repo.owner, &repo.name, number, token, &request)
+        {
+            Ok(result) => Ok((repo.clone(), result)),
+            Err(PullRequestError::NotFound) => {
+                if let Some(canonical_repo) = self.find_canonical_repo(repo, Some(token))? {
+                    match self.client.merge_pull_request(
+                        &canonical_repo.owner,
+                        &canonical_repo.name,
+                        number,
+                        token,
+                        &request,
+                    ) {
+                        Ok(result) => Ok((canonical_repo, result)),
+                        Err(PullRequestError::NotFound) => {
+                            Err(self.classify_missing_pull_request(&canonical_repo, Some(token)))
+                        }
+                        Err(error) => Err(map_pull_request_error(error)),
+                    }
+                } else {
+                    Err(self.classify_missing_pull_request(repo, Some(token)))
+                }
+            }
+            Err(error) => Err(map_pull_request_error(error)),
+        }
+    }
+
     fn classify_missing_pull_request(
         &self,
         repo: &ResolvedRepo,
@@ -465,6 +532,13 @@ pub struct PrCreateRequest {
     pub body: Option<PrTextSource>,
 }
 
+pub struct PrMergeRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub number: u64,
+    pub merge_method: PrMergeMethod,
+}
+
 pub struct PrListRequest {
     pub output: OutputFormat,
     pub repo: Option<String>,
@@ -495,6 +569,23 @@ struct PrCheckoutResult {
 pub enum PrTextSource {
     Inline(String),
     File(String),
+}
+
+#[derive(Clone, Copy)]
+pub enum PrMergeMethod {
+    Merge,
+    Squash,
+    Rebase,
+}
+
+impl PrMergeMethod {
+    fn as_api_value(self) -> &'static str {
+        match self {
+            Self::Merge => "merge",
+            Self::Squash => "squash",
+            Self::Rebase => "rebase",
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -638,6 +729,49 @@ fn render_pr_create(output: OutputFormat, pull_request: PullRequest) -> CommandO
             pull_request.html_url,
         ),
     )
+}
+
+fn render_pr_merge(
+    output: OutputFormat,
+    repo: &ResolvedRepo,
+    number: u64,
+    merge_method: PrMergeMethod,
+    result: PullRequestMergeResult,
+) -> CommandOutcome {
+    match output {
+        OutputFormat::Json { .. } => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "repository": format!("{}/{}", repo.owner, repo.name),
+                "pull_request": number,
+                "merge_method": merge_method.as_api_value(),
+                "merged": result.merged,
+                "sha": result.sha,
+                "message": result.message,
+            }),
+        ),
+        OutputFormat::Text => CommandOutcome::text(
+            EXIT_OK,
+            format!(
+                "{} pull request #{}\nrepository: {}/{}\nmerge_method: {}\nsha: {}\nmessage: {}",
+                if result.merged {
+                    "Merged"
+                } else {
+                    "Did not merge"
+                },
+                number,
+                repo.owner,
+                repo.name,
+                merge_method.as_api_value(),
+                result.sha.as_deref().unwrap_or("unknown"),
+                if result.message.is_empty() {
+                    "none"
+                } else {
+                    result.message.as_str()
+                },
+            ),
+        ),
+    }
 }
 
 fn render_pr_checkout(output: OutputFormat, checkout: PrCheckoutResult) -> CommandOutcome {

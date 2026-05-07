@@ -85,6 +85,7 @@ fn help_text_describes_json_usage_per_command() {
         ["help", "issue", "create"],
         ["help", "issue", "comment"],
         ["help", "pr", "comment"],
+        ["help", "pr", "merge"],
         ["help", "pr", "checkout"],
         ["help", "repo", "clone"],
     ] {
@@ -151,6 +152,29 @@ fn help_json_can_describe_pr_edit() {
     assert!(flags.iter().any(|flag| flag["name"] == "--state"));
     assert!(flags.iter().any(|flag| flag["name"] == "--draft"));
     assert!(flags.iter().any(|flag| flag["name"] == "--ready"));
+}
+
+#[test]
+fn help_json_can_describe_pr_merge() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "pr", "merge", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["path"], "pr merge");
+    assert_eq!(body["gh_equivalent"], "gh pr merge");
+    assert_eq!(body["auth"], "required");
+    assert_eq!(body["repo_inference"], true);
+
+    let flags = body["flags"].as_array().unwrap();
+    assert!(flags.iter().any(|flag| flag["name"] == "--merge"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--squash"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--rebase"));
 }
 
 #[test]

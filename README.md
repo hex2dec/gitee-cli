@@ -34,7 +34,7 @@ automation and day-to-day development:
 - checking whether auth is usable before starting work
 - inspecting repository metadata from a slug or a local checkout
 - reading issue history before making a change
-- viewing, listing, creating, commenting on, and checking out pull requests
+- viewing, listing, creating, merging, commenting on, and checking out pull requests
 - producing stable `--json` output and meaningful exit codes for scripts
 
 The project is intentionally opinionated:
@@ -194,6 +194,12 @@ Comment on a pull request:
 gitee pr comment 42 --repo octo/demo --body "Ship it" --json
 ```
 
+Merge a pull request:
+
+```bash
+gitee pr merge 42 --repo octo/demo --squash --json
+```
+
 Check out a pull request head branch into the current local repository:
 
 ```bash
@@ -216,6 +222,7 @@ Commands that can use local repository context include:
 - `pr list`
 - `pr comment`
 - `pr create`
+- `pr merge`
 - `pr checkout`
 - `pr status`
 
@@ -245,6 +252,7 @@ Commands that require authentication:
 - `issue comment`
 - `pr comment`
 - `pr create`
+- `pr merge`
 - `pr status`
 
 Runtime token resolution order:

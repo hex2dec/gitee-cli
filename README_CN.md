@@ -34,7 +34,7 @@ gitee help --json
 - 在执行任务前先确认认证是否可用
 - 通过仓库 slug 或本地 checkout 检查仓库元数据
 - 在修改代码前先阅读 Issue 上下文
-- 在终端里查看、列出、创建、评论和检出 Pull Request
+- 在终端里查看、列出、创建、合并、评论和检出 Pull Request
 - 为脚本提供稳定的 `--json` 输出和明确的退出码
 
 这个项目是有明确取舍的：
@@ -193,6 +193,12 @@ gitee pr create --repo octo/demo --head feature/body-file --title "Read body fil
 gitee pr comment 42 --repo octo/demo --body "Ship it" --json
 ```
 
+合并一个 Pull Request：
+
+```bash
+gitee pr merge 42 --repo octo/demo --squash --json
+```
+
 将 Pull Request 的 head 分支检出到当前本地仓库：
 
 ```bash
@@ -214,6 +220,7 @@ gitee pr checkout 42 --repo octo/demo --json
 - `pr list`
 - `pr comment`
 - `pr create`
+- `pr merge`
 - `pr checkout`
 - `pr status`
 
@@ -242,6 +249,7 @@ gitee pr checkout 42 --repo octo/demo --json
 - `issue comment`
 - `pr comment`
 - `pr create`
+- `pr merge`
 - `pr status`
 
 运行时 token 的解析优先级：
