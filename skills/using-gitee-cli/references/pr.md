@@ -128,6 +128,38 @@ gitee pr edit 42 --repo octo/demo --title "Updated title" --json
 gitee pr edit 42 --body-file ./body.md --state open --ready --json
 ```
 
+## `gitee pr merge`
+
+- `gh` equivalent: `gh pr merge`
+- Summary: merge a pull request.
+- Auth: `required`
+- Local git required: no
+- Repo inference: yes
+- Syntax:
+
+```bash
+gitee pr merge <PR> [--repo <OWNER/REPO>] [--merge | --squash | --rebase] [--json]
+```
+
+- Arguments:
+  - `<PR>`: pull request number
+- Flags:
+  - `--repo <OWNER/REPO>`: target repository
+  - `--merge`: merge the pull request
+  - `--squash`: squash and merge the pull request
+  - `--rebase`: rebase and merge the pull request
+  - `--json`: output machine-readable JSON
+- Notes:
+  - Provide at most one of `--merge`, `--squash`, or `--rebase`.
+  - When no merge strategy flag is provided, the command uses the default merge strategy.
+  - When `--repo` is omitted, the command can infer the repository from local git context.
+- Examples:
+
+```bash
+gitee pr merge 42 --repo octo/demo --json
+gitee pr merge 42 --squash --json
+```
+
 ## `gitee pr comment`
 
 - `gh` equivalent: `gh pr comment`
