@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 
-use gitee_api_v5::{GiteeClient, RepoError, Repository};
+use gitee_api_v5::{GiteeClient, RepoError, RepositoryResponse};
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_GIT, EXIT_OK, EXIT_REMOTE, OutputFormat};
@@ -60,7 +60,7 @@ impl RepoService {
                 .client
                 .fetch_repository(&resolved.owner, &resolved.name, token.as_deref())
             {
-                Ok(repository) => repository,
+                Ok(repository) => repository.into(),
                 Err(RepoError::NotFound) if resolved.allow_human_name_fallback => {
                     let Some(token) = token.as_deref() else {
                         return Err(map_repo_error(RepoError::NotFound));
@@ -70,6 +70,7 @@ impl RepoService {
                         .find_repository_by_human_name(&resolved.owner, &resolved.name, token)
                         .map_err(map_repo_error)?
                         .ok_or_else(|| map_repo_error(RepoError::NotFound))?
+                        .into()
                 }
                 Err(error) => return Err(map_repo_error(error)),
             };
@@ -94,7 +95,8 @@ impl RepoService {
         let repository = self
             .client
             .fetch_repository(&slug.owner, &slug.name, token.as_deref())
-            .map_err(map_repo_error)?;
+            .map_err(map_repo_error)?
+            .into();
         let transport = self.resolve_clone_transport(request.transport)?;
         let clone_url = transport.select_url(&repository).to_string();
         let destination = resolve_clone_destination(request.destination.as_deref(), &repository);
@@ -167,6 +169,45 @@ struct RepoCloneView {
     clone_url: String,
     transport: CloneTransport,
     destination: PathBuf,
+}
+
+struct Repository {
+    owner: String,
+    name: String,
+    full_name: String,
+    html_url: String,
+    ssh_url: String,
+    clone_url: String,
+    fork: bool,
+    default_branch: String,
+}
+
+impl From<RepositoryResponse> for Repository {
+    fn from(response: RepositoryResponse) -> Self {
+        let full_name = response.full_name;
+        let owner = full_name
+            .split_once('/')
+            .map(|(owner, _)| owner.to_string())
+            .unwrap_or_default();
+        let html_url = response.html_url.unwrap_or_default();
+        let ssh_url = response
+            .ssh_url
+            .unwrap_or_else(|| format!("git@gitee.com:{full_name}.git"));
+        let clone_url = response
+            .clone_url
+            .unwrap_or_else(|| format!("https://gitee.com/{full_name}.git"));
+
+        Self {
+            owner,
+            name: response.path,
+            full_name,
+            html_url,
+            ssh_url,
+            clone_url,
+            fork: response.fork,
+            default_branch: response.default_branch,
+        }
+    }
 }
 
 struct ResolvedRepoView {

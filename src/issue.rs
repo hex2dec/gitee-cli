@@ -3,7 +3,9 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use gitee_api_v5::{CreateIssue, GiteeClient, Issue, IssueComment, IssueError, IssueListOptions};
+use gitee_api_v5::{
+    CreateIssue, GiteeClient, IssueCommentResponse, IssueError, IssueListOptions, IssueResponse,
+};
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_AUTH, EXIT_OK, EXIT_REMOTE, OutputFormat};
@@ -45,7 +47,10 @@ impl IssueService {
                     per_page: request.per_page,
                 },
             )
-            .map_err(map_issue_list_error)?;
+            .map_err(map_issue_list_error)?
+            .into_iter()
+            .map(Into::into)
+            .collect();
 
         Ok(render_issue_list(
             request.output,
@@ -77,7 +82,8 @@ impl IssueService {
                 &request.number,
                 token.as_deref(),
             )
-            .map_err(|error| map_issue_error(error, "issue not found"))?;
+            .map_err(|error| map_issue_error(error, "issue not found"))?
+            .into();
         let comments = if request.comments {
             Some(
                 self.client
@@ -89,7 +95,10 @@ impl IssueService {
                         request.page,
                         request.per_page,
                     )
-                    .map_err(|error| map_issue_error(error, "issue not found"))?,
+                    .map_err(|error| map_issue_error(error, "issue not found"))?
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
             )
         } else {
             None
@@ -134,7 +143,8 @@ impl IssueService {
                     body: body.as_deref(),
                 },
             )
-            .map_err(map_issue_create_error)?;
+            .map_err(map_issue_create_error)?
+            .into();
 
         Ok(render_issue_create(
             request.output,
@@ -174,7 +184,8 @@ impl IssueService {
                 &token,
                 &body,
             )
-            .map_err(|error| map_issue_error(error, "issue not found"))?;
+            .map_err(|error| map_issue_error(error, "issue not found"))?
+            .into();
 
         Ok(render_issue_comment(
             request.output,
@@ -263,6 +274,54 @@ struct IssueListView {
     page: u32,
     per_page: u32,
     issues: Vec<Issue>,
+}
+
+struct Issue {
+    number: String,
+    title: String,
+    state: String,
+    body: String,
+    author: String,
+    comments: u64,
+    html_url: String,
+    created_at: String,
+    updated_at: String,
+}
+
+struct IssueComment {
+    id: u64,
+    author: String,
+    body: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<IssueResponse> for Issue {
+    fn from(response: IssueResponse) -> Self {
+        Self {
+            number: response.number,
+            title: response.title,
+            state: response.state,
+            body: response.body.unwrap_or_default(),
+            author: response.user.map(|user| user.login).unwrap_or_default(),
+            comments: response.comments,
+            html_url: response.html_url.unwrap_or_default(),
+            created_at: response.created_at.unwrap_or_default(),
+            updated_at: response.updated_at.unwrap_or_default(),
+        }
+    }
+}
+
+impl From<IssueCommentResponse> for IssueComment {
+    fn from(response: IssueCommentResponse) -> Self {
+        Self {
+            id: response.id,
+            author: response.user.map(|user| user.login).unwrap_or_default(),
+            body: response.body.unwrap_or_default(),
+            created_at: response.created_at.unwrap_or_default(),
+            updated_at: response.updated_at.unwrap_or_default(),
+        }
+    }
 }
 
 struct IssueView {

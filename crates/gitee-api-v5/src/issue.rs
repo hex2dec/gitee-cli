@@ -23,89 +23,41 @@ pub struct IssueListOptions<'a> {
     pub per_page: u32,
 }
 
-pub struct Issue {
+#[derive(Deserialize)]
+pub struct IssueResponse {
     pub number: String,
     pub title: String,
     pub state: String,
-    pub body: String,
-    pub author: String,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
     pub comments: u64,
-    pub html_url: String,
-    pub created_at: String,
-    pub updated_at: String,
+    #[serde(default)]
+    pub html_url: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub user: Option<IssueUserResponse>,
 }
 
-pub struct IssueComment {
+#[derive(Deserialize)]
+pub struct IssueUserResponse {
+    pub login: String,
+}
+
+#[derive(Deserialize)]
+pub struct IssueCommentResponse {
     pub id: u64,
-    pub author: String,
-    pub body: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Deserialize)]
-struct IssueResponse {
-    number: String,
-    title: String,
-    state: String,
     #[serde(default)]
-    body: Option<String>,
+    pub body: Option<String>,
     #[serde(default)]
-    comments: u64,
+    pub created_at: Option<String>,
     #[serde(default)]
-    html_url: Option<String>,
+    pub updated_at: Option<String>,
     #[serde(default)]
-    created_at: Option<String>,
-    #[serde(default)]
-    updated_at: Option<String>,
-    #[serde(default)]
-    user: Option<IssueUserResponse>,
-}
-
-#[derive(Deserialize)]
-struct IssueUserResponse {
-    login: String,
-}
-
-#[derive(Deserialize)]
-struct IssueCommentResponse {
-    id: u64,
-    #[serde(default)]
-    body: Option<String>,
-    #[serde(default)]
-    created_at: Option<String>,
-    #[serde(default)]
-    updated_at: Option<String>,
-    #[serde(default)]
-    user: Option<IssueUserResponse>,
-}
-
-impl IssueResponse {
-    fn into_issue(self) -> Issue {
-        Issue {
-            number: self.number,
-            title: self.title,
-            state: self.state,
-            body: self.body.unwrap_or_default(),
-            author: self.user.map(|user| user.login).unwrap_or_default(),
-            comments: self.comments,
-            html_url: self.html_url.unwrap_or_default(),
-            created_at: self.created_at.unwrap_or_default(),
-            updated_at: self.updated_at.unwrap_or_default(),
-        }
-    }
-}
-
-impl IssueCommentResponse {
-    fn into_issue_comment(self) -> IssueComment {
-        IssueComment {
-            id: self.id,
-            author: self.user.map(|user| user.login).unwrap_or_default(),
-            body: self.body.unwrap_or_default(),
-            created_at: self.created_at.unwrap_or_default(),
-            updated_at: self.updated_at.unwrap_or_default(),
-        }
-    }
+    pub user: Option<IssueUserResponse>,
 }
 
 impl GiteeClient {
@@ -115,7 +67,7 @@ impl GiteeClient {
         repo: &str,
         token: Option<&str>,
         options: IssueListOptions<'_>,
-    ) -> Result<Vec<Issue>, IssueError> {
+    ) -> Result<Vec<IssueResponse>, IssueError> {
         let mut query = vec![
             ("state", options.state.to_string()),
             ("page", options.page.to_string()),
@@ -138,13 +90,9 @@ impl GiteeClient {
             .map_err(IssueError::Transport)?;
 
         if response.status().is_success() {
-            let issues = response
+            return response
                 .json::<Vec<IssueResponse>>()
-                .map_err(IssueError::Transport)?
-                .into_iter()
-                .map(IssueResponse::into_issue)
-                .collect();
-            return Ok(issues);
+                .map_err(IssueError::Transport);
         }
 
         if matches!(response.status().as_u16(), 400 | 401) {
@@ -164,7 +112,7 @@ impl GiteeClient {
         repo: &str,
         number: &str,
         token: Option<&str>,
-    ) -> Result<Issue, IssueError> {
+    ) -> Result<IssueResponse, IssueError> {
         let mut request = self.client.get(format!(
             "{}/v5/repos/{owner}/{repo}/issues/{number}",
             self.base_url
@@ -177,11 +125,9 @@ impl GiteeClient {
         let response = request.send().map_err(IssueError::Transport)?;
 
         if response.status().is_success() {
-            let issue = response
+            return response
                 .json::<IssueResponse>()
-                .map_err(IssueError::Transport)?
-                .into_issue();
-            return Ok(issue);
+                .map_err(IssueError::Transport);
         }
 
         if matches!(response.status().as_u16(), 400 | 401) {
@@ -203,7 +149,7 @@ impl GiteeClient {
         token: Option<&str>,
         page: u32,
         per_page: u32,
-    ) -> Result<Vec<IssueComment>, IssueError> {
+    ) -> Result<Vec<IssueCommentResponse>, IssueError> {
         let mut query = vec![
             ("page", page.to_string()),
             ("per_page", per_page.to_string()),
@@ -224,13 +170,9 @@ impl GiteeClient {
             .map_err(IssueError::Transport)?;
 
         if response.status().is_success() {
-            let comments = response
+            return response
                 .json::<Vec<IssueCommentResponse>>()
-                .map_err(IssueError::Transport)?
-                .into_iter()
-                .map(IssueCommentResponse::into_issue_comment)
-                .collect();
-            return Ok(comments);
+                .map_err(IssueError::Transport);
         }
 
         if matches!(response.status().as_u16(), 400 | 401) {
@@ -251,7 +193,7 @@ impl GiteeClient {
         number: &str,
         token: &str,
         body: &str,
-    ) -> Result<IssueComment, IssueError> {
+    ) -> Result<IssueCommentResponse, IssueError> {
         let response = self
             .client
             .post(format!(
@@ -264,11 +206,9 @@ impl GiteeClient {
             .map_err(IssueError::Transport)?;
 
         if response.status().is_success() {
-            let comment = response
+            return response
                 .json::<IssueCommentResponse>()
-                .map_err(IssueError::Transport)?
-                .into_issue_comment();
-            return Ok(comment);
+                .map_err(IssueError::Transport);
         }
 
         if matches!(response.status().as_u16(), 400 | 401) {
@@ -287,7 +227,7 @@ impl GiteeClient {
         owner: &str,
         token: &str,
         request: &CreateIssue<'_>,
-    ) -> Result<Issue, IssueError> {
+    ) -> Result<IssueResponse, IssueError> {
         let mut form = vec![
             ("access_token", token.to_string()),
             ("repo", request.repo.to_string()),
@@ -306,11 +246,9 @@ impl GiteeClient {
             .map_err(IssueError::Transport)?;
 
         if response.status().is_success() {
-            let issue = response
+            return response
                 .json::<IssueResponse>()
-                .map_err(IssueError::Transport)?
-                .into_issue();
-            return Ok(issue);
+                .map_err(IssueError::Transport);
         }
 
         let status = response.status().as_u16();

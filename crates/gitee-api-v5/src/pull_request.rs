@@ -58,171 +58,66 @@ pub struct PullRequestListFilters {
     pub limit: usize,
 }
 
-pub struct PullRequest {
+#[derive(Deserialize)]
+pub struct PullRequestResponse {
     pub number: u64,
     pub state: String,
     pub title: String,
+    #[serde(default)]
     pub body: Option<String>,
-    pub author: String,
-    pub repository: String,
-    pub head: PullRequestBranch,
-    pub base: PullRequestBranch,
-    pub draft: bool,
-    pub mergeable: Option<bool>,
     pub html_url: String,
+    #[serde(default)]
+    pub draft: bool,
+    #[serde(default)]
+    pub mergeable: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
     pub merged_at: Option<String>,
+    pub user: PullRequestUserResponse,
+    pub head: PullRequestBranchResponse,
+    pub base: PullRequestBranchResponse,
 }
 
-pub struct PullRequestComment {
+#[derive(Deserialize)]
+pub struct PullRequestCommentResponse {
     pub id: u64,
     pub body: String,
-    pub author: String,
     pub html_url: String,
     pub created_at: String,
     pub updated_at: String,
-    pub comment_type: String,
+    #[serde(default)]
+    pub comment_type: Option<String>,
+    pub user: PullRequestUserResponse,
 }
 
-pub struct PullRequestMergeResult {
+#[derive(Deserialize)]
+pub struct PullRequestMergeResponse {
+    #[serde(default)]
     pub sha: Option<String>,
+    #[serde(default)]
     pub merged: bool,
-    pub message: String,
-}
-
-pub struct PullRequestBranch {
-    pub r#ref: String,
-    pub sha: String,
-    pub repository: String,
+    #[serde(default)]
+    pub message: Option<String>,
 }
 
 #[derive(Deserialize)]
-struct PullRequestResponse {
-    number: u64,
-    state: String,
-    title: String,
-    #[serde(default)]
-    body: Option<String>,
-    html_url: String,
-    #[serde(default)]
-    draft: bool,
-    #[serde(default)]
-    mergeable: Option<bool>,
-    created_at: String,
-    updated_at: String,
-    #[serde(default)]
-    merged_at: Option<String>,
-    user: PullRequestUserResponse,
-    head: PullRequestBranchResponse,
-    base: PullRequestBranchResponse,
+pub struct PullRequestUserResponse {
+    pub login: String,
 }
 
 #[derive(Deserialize)]
-struct PullRequestCommentResponse {
-    id: u64,
-    body: String,
-    html_url: String,
-    created_at: String,
-    updated_at: String,
-    #[serde(default)]
-    comment_type: Option<String>,
-    user: PullRequestUserResponse,
-}
-
-#[derive(Deserialize)]
-struct PullRequestMergeResponse {
-    #[serde(default)]
-    sha: Option<String>,
-    #[serde(default)]
-    merged: bool,
-    #[serde(default)]
-    message: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct PullRequestUserResponse {
-    login: String,
-}
-
-#[derive(Deserialize)]
-struct PullRequestBranchResponse {
+pub struct PullRequestBranchResponse {
     #[serde(rename = "ref")]
-    branch: String,
-    sha: String,
+    pub branch: String,
+    pub sha: String,
     #[serde(default)]
-    repo: Option<PullRequestRepositoryResponse>,
+    pub repo: Option<PullRequestRepositoryResponse>,
 }
 
 #[derive(Deserialize)]
-struct PullRequestRepositoryResponse {
-    full_name: String,
-}
-
-impl PullRequestResponse {
-    fn into_pull_request(self, owner: &str, repo: &str) -> PullRequest {
-        let repository = format!("{owner}/{repo}");
-
-        PullRequest {
-            number: self.number,
-            state: self.state,
-            title: self.title,
-            body: self.body,
-            author: self.user.login,
-            repository: repository.clone(),
-            head: self.head.into_pull_request_branch(),
-            base: self.base.into_pull_request_branch_with_default(&repository),
-            draft: self.draft,
-            mergeable: self.mergeable,
-            html_url: self.html_url,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            merged_at: self.merged_at,
-        }
-    }
-}
-
-impl PullRequestBranchResponse {
-    fn into_pull_request_branch(self) -> PullRequestBranch {
-        self.into_pull_request_branch_with_default("")
-    }
-
-    fn into_pull_request_branch_with_default(self, default_repository: &str) -> PullRequestBranch {
-        PullRequestBranch {
-            r#ref: self.branch,
-            sha: self.sha,
-            repository: self
-                .repo
-                .map(|repo| repo.full_name)
-                .unwrap_or_else(|| default_repository.to_string()),
-        }
-    }
-}
-
-impl PullRequestCommentResponse {
-    fn into_pull_request_comment(self) -> PullRequestComment {
-        PullRequestComment {
-            id: self.id,
-            body: self.body,
-            author: self.user.login,
-            html_url: self.html_url,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            comment_type: self
-                .comment_type
-                .unwrap_or_else(|| "pr_comment".to_string()),
-        }
-    }
-}
-
-impl PullRequestMergeResponse {
-    fn into_pull_request_merge_result(self) -> PullRequestMergeResult {
-        PullRequestMergeResult {
-            sha: self.sha,
-            merged: self.merged,
-            message: self.message.unwrap_or_default(),
-        }
-    }
+pub struct PullRequestRepositoryResponse {
+    pub full_name: String,
 }
 
 impl GiteeClient {
@@ -232,7 +127,7 @@ impl GiteeClient {
         repo: &str,
         number: u64,
         token: Option<&str>,
-    ) -> Result<PullRequest, PullRequestError> {
+    ) -> Result<PullRequestResponse, PullRequestError> {
         let mut request = self.client.get(format!(
             "{}/v5/repos/{owner}/{repo}/pulls/{number}",
             self.base_url
@@ -245,10 +140,9 @@ impl GiteeClient {
         let response = request.send().map_err(PullRequestError::Transport)?;
 
         if response.status().is_success() {
-            let pull_request = response
+            return response
                 .json::<PullRequestResponse>()
-                .map_err(PullRequestError::Transport)?;
-            return Ok(pull_request.into_pull_request(owner, repo));
+                .map_err(PullRequestError::Transport);
         }
 
         if matches!(response.status().as_u16(), 400 | 401) {
@@ -270,7 +164,7 @@ impl GiteeClient {
         repo: &str,
         filters: &PullRequestListFilters,
         token: Option<&str>,
-    ) -> Result<Vec<PullRequest>, RepoError> {
+    ) -> Result<Vec<PullRequestResponse>, RepoError> {
         let mut request = self
             .client
             .get(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url));
@@ -307,13 +201,9 @@ impl GiteeClient {
         let response = request.send().map_err(RepoError::Transport)?;
 
         if response.status().is_success() {
-            let pull_requests = response
+            return response
                 .json::<Vec<PullRequestResponse>>()
-                .map_err(RepoError::Transport)?
-                .into_iter()
-                .map(|pull_request| pull_request.into_pull_request(owner, repo))
-                .collect();
-            return Ok(pull_requests);
+                .map_err(RepoError::Transport);
         }
 
         if matches!(response.status().as_u16(), 400 | 401) {
@@ -334,7 +224,7 @@ impl GiteeClient {
         number: u64,
         token: &str,
         request: &CreatePullRequestComment<'_>,
-    ) -> Result<PullRequestComment, PullRequestError> {
+    ) -> Result<PullRequestCommentResponse, PullRequestError> {
         let response = self
             .client
             .post(format!(
@@ -347,10 +237,9 @@ impl GiteeClient {
             .map_err(PullRequestError::Transport)?;
 
         if response.status().is_success() {
-            let comment = response
+            return response
                 .json::<PullRequestCommentResponse>()
-                .map_err(PullRequestError::Transport)?;
-            return Ok(comment.into_pull_request_comment());
+                .map_err(PullRequestError::Transport);
         }
 
         if matches!(response.status().as_u16(), 400 | 401) {
@@ -372,7 +261,7 @@ impl GiteeClient {
         repo: &str,
         token: &str,
         request: &CreatePullRequest<'_>,
-    ) -> Result<PullRequest, PullRequestError> {
+    ) -> Result<PullRequestResponse, PullRequestError> {
         let response = self
             .client
             .post(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url))
@@ -387,10 +276,9 @@ impl GiteeClient {
             .map_err(PullRequestError::Transport)?;
 
         if response.status().is_success() {
-            let pull_request = response
+            return response
                 .json::<PullRequestResponse>()
-                .map_err(PullRequestError::Transport)?;
-            return Ok(pull_request.into_pull_request(owner, repo));
+                .map_err(PullRequestError::Transport);
         }
 
         let status = response.status().as_u16();
@@ -420,7 +308,7 @@ impl GiteeClient {
         number: u64,
         token: &str,
         request: &UpdatePullRequest<'_>,
-    ) -> Result<PullRequest, PullRequestError> {
+    ) -> Result<PullRequestResponse, PullRequestError> {
         let mut form = vec![("access_token", token.to_string())];
 
         if let Some(title) = request.title {
@@ -451,10 +339,9 @@ impl GiteeClient {
             .map_err(PullRequestError::Transport)?;
 
         if response.status().is_success() {
-            let pull_request = response
+            return response
                 .json::<PullRequestResponse>()
-                .map_err(PullRequestError::Transport)?;
-            return Ok(pull_request.into_pull_request(owner, repo));
+                .map_err(PullRequestError::Transport);
         }
 
         let status = response.status().as_u16();
@@ -484,7 +371,7 @@ impl GiteeClient {
         number: u64,
         token: &str,
         request: &MergePullRequest<'_>,
-    ) -> Result<PullRequestMergeResult, PullRequestError> {
+    ) -> Result<PullRequestMergeResponse, PullRequestError> {
         let response = self
             .client
             .put(format!(
@@ -499,10 +386,9 @@ impl GiteeClient {
             .map_err(PullRequestError::Transport)?;
 
         if response.status().is_success() {
-            let result = response
+            return response
                 .json::<PullRequestMergeResponse>()
-                .map_err(PullRequestError::Transport)?;
-            return Ok(result.into_pull_request_merge_result());
+                .map_err(PullRequestError::Transport);
         }
 
         let status = response.status().as_u16();

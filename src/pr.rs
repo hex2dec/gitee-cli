@@ -3,9 +3,10 @@ use std::io::{self, Read};
 use std::process::Command as ProcessCommand;
 
 use gitee_api_v5::{
-    CreatePullRequest, CreatePullRequestComment, GiteeClient, MergePullRequest, PullRequest,
-    PullRequestComment, PullRequestError, PullRequestListFilters, PullRequestMergeResult,
-    RepoError, UpdatePullRequest,
+    CreatePullRequest, CreatePullRequestComment, GiteeClient, MergePullRequest,
+    PullRequestBranchResponse, PullRequestCommentResponse, PullRequestError,
+    PullRequestListFilters, PullRequestMergeResponse, PullRequestResponse, RepoError,
+    RepositoryResponse, UpdatePullRequest,
 };
 use serde_json::json;
 
@@ -64,7 +65,8 @@ impl PrService {
                 &token,
                 &CreatePullRequestComment { body: &body },
             )
-            .map_err(map_pull_request_error)?;
+            .map_err(map_pull_request_error)?
+            .into();
 
         Ok(render_pr_comment(
             request.output,
@@ -128,7 +130,8 @@ impl PrService {
                     body: body.as_deref(),
                 },
             )
-            .map_err(map_pull_request_error)?;
+            .map_err(map_pull_request_error)?
+            .into_pull_request(&repo);
 
         Ok(render_pr_create(request.output, pull_request))
     }
@@ -299,7 +302,7 @@ impl PrService {
             .client
             .fetch_pull_request(&repo.owner, &repo.name, number, token)
         {
-            Ok(pull_request) => Ok(pull_request),
+            Ok(pull_request) => Ok(pull_request.into_pull_request(repo)),
             Err(PullRequestError::NotFound) => {
                 let target_repo =
                     if let Some(canonical_repo) = self.find_canonical_repo(repo, token)? {
@@ -309,7 +312,9 @@ impl PrService {
                             number,
                             token,
                         ) {
-                            Ok(pull_request) => return Ok(pull_request),
+                            Ok(pull_request) => {
+                                return Ok(pull_request.into_pull_request(&canonical_repo));
+                            }
                             Err(PullRequestError::NotFound) => canonical_repo,
                             Err(error) => return Err(map_pull_request_error(error)),
                         }
@@ -333,7 +338,13 @@ impl PrService {
             .client
             .fetch_pull_requests(&repo.owner, &repo.name, filters, token)
         {
-            Ok(pull_requests) => Ok((repo.clone(), pull_requests)),
+            Ok(pull_requests) => Ok((
+                repo.clone(),
+                pull_requests
+                    .into_iter()
+                    .map(|pull_request| pull_request.into_pull_request(repo))
+                    .collect(),
+            )),
             Err(RepoError::NotFound) => {
                 let Some(canonical_repo) = self.find_canonical_repo(repo, token)? else {
                     return Err(map_repo_error(RepoError::NotFound));
@@ -348,6 +359,11 @@ impl PrService {
                         token,
                     )
                     .map_err(map_repo_error)?;
+
+                let pull_requests = pull_requests
+                    .into_iter()
+                    .map(|pull_request| pull_request.into_pull_request(&canonical_repo))
+                    .collect();
 
                 Ok((canonical_repo, pull_requests))
             }
@@ -374,8 +390,8 @@ impl PrService {
             .map_err(map_repo_error)?;
 
         Ok(repository.map(|repository| ResolvedRepo {
-            owner: repository.owner,
-            name: repository.name,
+            owner: repository_owner(&repository),
+            name: repository.path,
             source: repo.source,
             current_branch: repo.current_branch.clone(),
             allow_human_name_fallback: false,
@@ -393,7 +409,7 @@ impl PrService {
             .client
             .update_pull_request(&repo.owner, &repo.name, number, token, request)
         {
-            Ok(pull_request) => Ok(pull_request),
+            Ok(pull_request) => Ok(pull_request.into_pull_request(repo)),
             Err(PullRequestError::NotFound) => {
                 if let Some(canonical_repo) = self.find_canonical_repo(repo, Some(token))? {
                     match self.client.update_pull_request(
@@ -403,7 +419,7 @@ impl PrService {
                         token,
                         request,
                     ) {
-                        Ok(pull_request) => Ok(pull_request),
+                        Ok(pull_request) => Ok(pull_request.into_pull_request(&canonical_repo)),
                         Err(PullRequestError::NotFound) => {
                             Err(self.classify_missing_pull_request(&canonical_repo, Some(token)))
                         }
@@ -430,7 +446,7 @@ impl PrService {
             .client
             .merge_pull_request(&repo.owner, &repo.name, number, token, &request)
         {
-            Ok(result) => Ok((repo.clone(), result)),
+            Ok(result) => Ok((repo.clone(), result.into())),
             Err(PullRequestError::NotFound) => {
                 if let Some(canonical_repo) = self.find_canonical_repo(repo, Some(token))? {
                     match self.client.merge_pull_request(
@@ -440,7 +456,7 @@ impl PrService {
                         token,
                         &request,
                     ) {
-                        Ok(result) => Ok((canonical_repo, result)),
+                        Ok(result) => Ok((canonical_repo, result.into())),
                         Err(PullRequestError::NotFound) => {
                             Err(self.classify_missing_pull_request(&canonical_repo, Some(token)))
                         }
@@ -498,6 +514,128 @@ impl PrService {
             Err(error) => Err(map_pull_request_error(error)),
         }
     }
+}
+
+struct PullRequest {
+    number: u64,
+    state: String,
+    title: String,
+    body: Option<String>,
+    author: String,
+    repository: String,
+    head: PullRequestBranch,
+    base: PullRequestBranch,
+    draft: bool,
+    mergeable: Option<bool>,
+    html_url: String,
+    created_at: String,
+    updated_at: String,
+    merged_at: Option<String>,
+}
+
+struct PullRequestComment {
+    id: u64,
+    body: String,
+    author: String,
+    html_url: String,
+    created_at: String,
+    updated_at: String,
+    comment_type: String,
+}
+
+struct PullRequestMergeResult {
+    sha: Option<String>,
+    merged: bool,
+    message: String,
+}
+
+struct PullRequestBranch {
+    r#ref: String,
+    sha: String,
+    repository: String,
+}
+
+trait PullRequestResponseExt {
+    fn into_pull_request(self, repo: &ResolvedRepo) -> PullRequest;
+}
+
+impl PullRequestResponseExt for PullRequestResponse {
+    fn into_pull_request(self, repo: &ResolvedRepo) -> PullRequest {
+        let repository = format!("{}/{}", repo.owner, repo.name);
+
+        PullRequest {
+            number: self.number,
+            state: self.state,
+            title: self.title,
+            body: self.body,
+            author: self.user.login,
+            repository: repository.clone(),
+            head: self.head.into_pull_request_branch(),
+            base: self.base.into_pull_request_branch_with_default(&repository),
+            draft: self.draft,
+            mergeable: self.mergeable,
+            html_url: self.html_url,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            merged_at: self.merged_at,
+        }
+    }
+}
+
+trait PullRequestBranchResponseExt {
+    fn into_pull_request_branch(self) -> PullRequestBranch;
+    fn into_pull_request_branch_with_default(self, default_repository: &str) -> PullRequestBranch;
+}
+
+impl PullRequestBranchResponseExt for PullRequestBranchResponse {
+    fn into_pull_request_branch(self) -> PullRequestBranch {
+        self.into_pull_request_branch_with_default("")
+    }
+
+    fn into_pull_request_branch_with_default(self, default_repository: &str) -> PullRequestBranch {
+        PullRequestBranch {
+            r#ref: self.branch,
+            sha: self.sha,
+            repository: self
+                .repo
+                .map(|repo| repo.full_name)
+                .unwrap_or_else(|| default_repository.to_string()),
+        }
+    }
+}
+
+impl From<PullRequestCommentResponse> for PullRequestComment {
+    fn from(response: PullRequestCommentResponse) -> Self {
+        Self {
+            id: response.id,
+            body: response.body,
+            author: response.user.login,
+            html_url: response.html_url,
+            created_at: response.created_at,
+            updated_at: response.updated_at,
+            comment_type: response
+                .comment_type
+                .unwrap_or_else(|| "pr_comment".to_string()),
+        }
+    }
+}
+
+impl From<PullRequestMergeResponse> for PullRequestMergeResult {
+    fn from(response: PullRequestMergeResponse) -> Self {
+        Self {
+            sha: response.sha,
+            merged: response.merged,
+            message: response.message.unwrap_or_default(),
+        }
+    }
+}
+
+fn repository_owner(repository: &RepositoryResponse) -> String {
+    repository
+        .full_name
+        .split_once('/')
+        .map(|(owner, _)| owner.to_string())
+        .unwrap_or_default()
 }
 
 pub struct PrViewRequest {
