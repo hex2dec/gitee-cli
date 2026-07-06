@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use clap::{Arg, ArgAction, ArgMatches, Command};
+use gitee_api_v5::PullRequestListFilters;
 
 use crate::auth::{AuthService, LoginRequest, LoginTokenSource};
 use crate::command::{CommandError, CommandOutcome, EXIT_OK, OutputFormat};
-use crate::gitee_api::PullRequestListFilters;
 use crate::issue::{
     IssueBodySource, IssueCommentRequest, IssueCreateRequest, IssueListRequest, IssueService,
     IssueStateFilter, IssueViewRequest,

@@ -1,0 +1,15 @@
+[package]
+name = "gitee-api-v5"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Gitee API v5 client"
+rust-version = "1.94.0"
+
+[dependencies]
+reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+
+[dev-dependencies]
+httpmock = "0.7.0"

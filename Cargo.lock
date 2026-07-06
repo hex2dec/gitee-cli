@@ -709,14 +709,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "gitee-api-v5"
+version = "0.1.0"
+dependencies = [
+ "httpmock",
+ "reqwest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "gitee-cli"
 version = "0.3.0"
 dependencies = [
  "assert_cmd",
  "clap",
+ "gitee-api-v5",
  "httpmock",
  "predicates",
- "reqwest",
  "serde",
  "serde_json",
  "tempfile",

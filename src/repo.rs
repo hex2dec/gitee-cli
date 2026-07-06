@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 
+use gitee_api_v5::{GiteeClient, RepoError, RepositoryResponse};
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_GIT, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::{CloneProtocol, ConfigStore};
-use crate::gitee_api::{GiteeClient, RepoError, Repository};
 use crate::repo_context::infer_repo_context;
 
 pub struct RepoService {
@@ -60,7 +60,7 @@ impl RepoService {
                 .client
                 .fetch_repository(&resolved.owner, &resolved.name, token.as_deref())
             {
-                Ok(repository) => repository,
+                Ok(repository) => repository.into(),
                 Err(RepoError::NotFound) if resolved.allow_human_name_fallback => {
                     let Some(token) = token.as_deref() else {
                         return Err(map_repo_error(RepoError::NotFound));
@@ -70,6 +70,7 @@ impl RepoService {
                         .find_repository_by_human_name(&resolved.owner, &resolved.name, token)
                         .map_err(map_repo_error)?
                         .ok_or_else(|| map_repo_error(RepoError::NotFound))?
+                        .into()
                 }
                 Err(error) => return Err(map_repo_error(error)),
             };
@@ -94,7 +95,8 @@ impl RepoService {
         let repository = self
             .client
             .fetch_repository(&slug.owner, &slug.name, token.as_deref())
-            .map_err(map_repo_error)?;
+            .map_err(map_repo_error)?
+            .into();
         let transport = self.resolve_clone_transport(request.transport)?;
         let clone_url = transport.select_url(&repository).to_string();
         let destination = resolve_clone_destination(request.destination.as_deref(), &repository);
@@ -167,6 +169,45 @@ struct RepoCloneView {
     clone_url: String,
     transport: CloneTransport,
     destination: PathBuf,
+}
+
+struct Repository {
+    owner: String,
+    name: String,
+    full_name: String,
+    html_url: String,
+    ssh_url: String,
+    clone_url: String,
+    fork: bool,
+    default_branch: String,
+}
+
+impl From<RepositoryResponse> for Repository {
+    fn from(response: RepositoryResponse) -> Self {
+        let full_name = response.full_name;
+        let owner = full_name
+            .split_once('/')
+            .map(|(owner, _)| owner.to_string())
+            .unwrap_or_default();
+        let html_url = response.html_url.unwrap_or_default();
+        let ssh_url = response
+            .ssh_url
+            .unwrap_or_else(|| format!("git@gitee.com:{full_name}.git"));
+        let clone_url = response
+            .clone_url
+            .unwrap_or_else(|| format!("https://gitee.com/{full_name}.git"));
+
+        Self {
+            owner,
+            name: response.path,
+            full_name,
+            html_url,
+            ssh_url,
+            clone_url,
+            fork: response.fork,
+            default_branch: response.default_branch,
+        }
+    }
 }
 
 struct ResolvedRepoView {
@@ -267,12 +308,14 @@ impl From<CloneTransport> for CloneProtocol {
 }
 
 fn render_repo_view(output: OutputFormat, view: RepoView) -> CommandOutcome {
+    let display_html_url = repo_display_html_url(&view.repository);
+
     match output {
         OutputFormat::Json { fields } => CommandOutcome::json(
             EXIT_OK,
             match fields {
-                Some(fields) => repo_view_selected_json(&view, &fields),
-                None => repo_view_json(&view),
+                Some(fields) => repo_view_selected_json(&view, &fields, &display_html_url),
+                None => repo_view_json(&view, &display_html_url),
             },
         ),
         OutputFormat::Text => CommandOutcome::text(
@@ -283,7 +326,7 @@ fn render_repo_view(output: OutputFormat, view: RepoView) -> CommandOutcome {
                 view.repository.default_branch,
                 view.current_branch.as_deref().unwrap_or("(none)"),
                 view.repository.fork,
-                view.repository.html_url,
+                display_html_url,
                 view.repository.ssh_url,
                 view.repository.clone_url,
                 view.source,
@@ -317,7 +360,7 @@ fn render_repo_clone(output: OutputFormat, view: RepoCloneView) -> CommandOutcom
     }
 }
 
-fn repo_view_json(view: &RepoView) -> serde_json::Value {
+fn repo_view_json(view: &RepoView, display_html_url: &str) -> serde_json::Value {
     json!({
         "source": view.source,
         "owner": view.repository.owner,
@@ -325,21 +368,25 @@ fn repo_view_json(view: &RepoView) -> serde_json::Value {
         "full_name": view.repository.full_name,
         "default_branch": view.repository.default_branch,
         "current_branch": view.current_branch,
-        "html_url": view.repository.html_url,
+        "html_url": display_html_url,
         "ssh_url": view.repository.ssh_url,
         "clone_url": view.repository.clone_url,
         "fork": view.repository.fork,
     })
 }
 
-fn repo_view_selected_json(view: &RepoView, fields: &[String]) -> serde_json::Value {
+fn repo_view_selected_json(
+    view: &RepoView,
+    fields: &[String],
+    display_html_url: &str,
+) -> serde_json::Value {
     let mut selected = serde_json::Map::with_capacity(fields.len());
 
     for field in fields {
         let value = match field.as_str() {
             "name" => json!(view.repository.name),
             "nameWithOwner" => json!(view.repository.full_name),
-            "url" => json!(view.repository.html_url),
+            "url" => json!(display_html_url),
             "defaultBranch" => json!(view.repository.default_branch),
             "sshUrl" => json!(view.repository.ssh_url),
             "cloneUrl" => json!(view.repository.clone_url),
@@ -351,6 +398,14 @@ fn repo_view_selected_json(view: &RepoView, fields: &[String]) -> serde_json::Va
     }
 
     serde_json::Value::Object(selected)
+}
+
+fn repo_display_html_url(repository: &Repository) -> String {
+    if repository.html_url.is_empty() {
+        return format!("https://gitee.com/{}", repository.full_name);
+    }
+
+    repository.html_url.trim_end_matches(".git").to_string()
 }
 
 fn resolve_clone_destination(destination: Option<&str>, repository: &Repository) -> PathBuf {
