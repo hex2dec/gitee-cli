@@ -2,6 +2,7 @@ use crate::client::GiteeClient;
 use crate::utils::parse_api_error_message;
 use serde::Deserialize;
 
+#[derive(Debug)]
 pub enum IssueError {
     InvalidToken,
     NotFound,

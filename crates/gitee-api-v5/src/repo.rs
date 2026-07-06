@@ -1,6 +1,7 @@
 use crate::client::GiteeClient;
 use serde::Deserialize;
 
+#[derive(Debug)]
 pub enum RepoError {
     InvalidToken,
     NotFound,

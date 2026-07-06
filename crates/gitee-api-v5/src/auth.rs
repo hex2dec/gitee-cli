@@ -1,6 +1,7 @@
 use crate::client::GiteeClient;
 use serde::Deserialize;
 
+#[derive(Debug)]
 pub enum AuthError {
     InvalidToken,
     Transport(reqwest::Error),
