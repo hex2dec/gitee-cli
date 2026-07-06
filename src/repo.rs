@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 
+use gitee_api_v5::{GiteeClient, RepoError, Repository};
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_GIT, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::{CloneProtocol, ConfigStore};
-use crate::gitee_api::{GiteeClient, RepoError, Repository};
 use crate::repo_context::infer_repo_context;
 
 pub struct RepoService {
@@ -267,12 +267,14 @@ impl From<CloneTransport> for CloneProtocol {
 }
 
 fn render_repo_view(output: OutputFormat, view: RepoView) -> CommandOutcome {
+    let display_html_url = repo_display_html_url(&view.repository);
+
     match output {
         OutputFormat::Json { fields } => CommandOutcome::json(
             EXIT_OK,
             match fields {
-                Some(fields) => repo_view_selected_json(&view, &fields),
-                None => repo_view_json(&view),
+                Some(fields) => repo_view_selected_json(&view, &fields, &display_html_url),
+                None => repo_view_json(&view, &display_html_url),
             },
         ),
         OutputFormat::Text => CommandOutcome::text(
@@ -283,7 +285,7 @@ fn render_repo_view(output: OutputFormat, view: RepoView) -> CommandOutcome {
                 view.repository.default_branch,
                 view.current_branch.as_deref().unwrap_or("(none)"),
                 view.repository.fork,
-                view.repository.html_url,
+                display_html_url,
                 view.repository.ssh_url,
                 view.repository.clone_url,
                 view.source,
@@ -317,7 +319,7 @@ fn render_repo_clone(output: OutputFormat, view: RepoCloneView) -> CommandOutcom
     }
 }
 
-fn repo_view_json(view: &RepoView) -> serde_json::Value {
+fn repo_view_json(view: &RepoView, display_html_url: &str) -> serde_json::Value {
     json!({
         "source": view.source,
         "owner": view.repository.owner,
@@ -325,21 +327,25 @@ fn repo_view_json(view: &RepoView) -> serde_json::Value {
         "full_name": view.repository.full_name,
         "default_branch": view.repository.default_branch,
         "current_branch": view.current_branch,
-        "html_url": view.repository.html_url,
+        "html_url": display_html_url,
         "ssh_url": view.repository.ssh_url,
         "clone_url": view.repository.clone_url,
         "fork": view.repository.fork,
     })
 }
 
-fn repo_view_selected_json(view: &RepoView, fields: &[String]) -> serde_json::Value {
+fn repo_view_selected_json(
+    view: &RepoView,
+    fields: &[String],
+    display_html_url: &str,
+) -> serde_json::Value {
     let mut selected = serde_json::Map::with_capacity(fields.len());
 
     for field in fields {
         let value = match field.as_str() {
             "name" => json!(view.repository.name),
             "nameWithOwner" => json!(view.repository.full_name),
-            "url" => json!(view.repository.html_url),
+            "url" => json!(display_html_url),
             "defaultBranch" => json!(view.repository.default_branch),
             "sshUrl" => json!(view.repository.ssh_url),
             "cloneUrl" => json!(view.repository.clone_url),
@@ -351,6 +357,14 @@ fn repo_view_selected_json(view: &RepoView, fields: &[String]) -> serde_json::Va
     }
 
     serde_json::Value::Object(selected)
+}
+
+fn repo_display_html_url(repository: &Repository) -> String {
+    if repository.html_url.is_empty() {
+        return format!("https://gitee.com/{}", repository.full_name);
+    }
+
+    repository.html_url.trim_end_matches(".git").to_string()
 }
 
 fn resolve_clone_destination(destination: Option<&str>, repository: &Repository) -> PathBuf {

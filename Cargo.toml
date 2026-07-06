@@ -11,13 +11,16 @@ rust-version = "1.94.0"
 keywords = ["gitee", "cli", "git", "automation"]
 categories = ["command-line-utilities"]
 
+[workspace]
+members = ["crates/gitee-api-v5"]
+
 [[bin]]
 name = "gitee"
 path = "src/main.rs"
 
 [dependencies]
 clap = "4.5.37"
-reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+gitee-api-v5 = { path = "crates/gitee-api-v5" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 toml = "0.8.23"

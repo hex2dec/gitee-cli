@@ -3,13 +3,11 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
+use gitee_api_v5::{CreateIssue, GiteeClient, Issue, IssueComment, IssueError, IssueListOptions};
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_AUTH, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
-use crate::gitee_api::{
-    CreateIssue, GiteeClient, Issue, IssueComment, IssueError, IssueListOptions,
-};
 use crate::repo_context::infer_repo_context;
 
 pub struct IssueService {

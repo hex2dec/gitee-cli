@@ -2,15 +2,15 @@ use std::fs;
 use std::io::{self, Read};
 use std::process::Command as ProcessCommand;
 
-use serde_json::json;
-
-use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputFormat};
-use crate::config::ConfigStore;
-use crate::gitee_api::{
+use gitee_api_v5::{
     CreatePullRequest, CreatePullRequestComment, GiteeClient, MergePullRequest, PullRequest,
     PullRequestComment, PullRequestError, PullRequestListFilters, PullRequestMergeResult,
     RepoError, UpdatePullRequest,
 };
+use serde_json::json;
+
+use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputFormat};
+use crate::config::ConfigStore;
 use crate::repo_context::infer_repo_context;
 
 pub struct PrService {
@@ -1275,19 +1275,19 @@ fn map_repo_error(error: RepoError) -> CommandError {
     }
 }
 
-fn map_auth_error(error: crate::gitee_api::AuthError) -> CommandError {
+fn map_auth_error(error: gitee_api_v5::AuthError) -> CommandError {
     match error {
-        crate::gitee_api::AuthError::InvalidToken => CommandError {
+        gitee_api_v5::AuthError::InvalidToken => CommandError {
             code: crate::command::EXIT_AUTH,
             stdout: None,
             stderr: Some("authentication failed".to_string()),
         },
-        crate::gitee_api::AuthError::Transport(err) => CommandError {
+        gitee_api_v5::AuthError::Transport(err) => CommandError {
             code: EXIT_REMOTE,
             stdout: None,
             stderr: Some(format!("remote request failed: {err}")),
         },
-        crate::gitee_api::AuthError::UnexpectedStatus(status) => CommandError {
+        gitee_api_v5::AuthError::UnexpectedStatus(status) => CommandError {
             code: EXIT_REMOTE,
             stdout: None,
             stderr: Some(format!(

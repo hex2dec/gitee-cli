@@ -1,10 +1,10 @@
 use std::io::{self, Read};
 
+use gitee_api_v5::{AuthError, GiteeClient};
 use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_AUTH, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
-use crate::gitee_api::{AuthError, GiteeClient};
 
 pub struct AuthService {
     config: ConfigStore,
