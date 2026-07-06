@@ -3,6 +3,7 @@ use crate::repo::RepoError;
 use crate::utils::parse_api_error_message;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug)]
 pub enum PullRequestError {
     InvalidToken,
     NotFound,
