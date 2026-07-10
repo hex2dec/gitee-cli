@@ -55,7 +55,7 @@ impl PrService {
 
         let repo = resolve_repo(request.repo.as_deref())?;
         let body = read_required_body(request.body)?;
-        let target_repo = self.resolve_comment_target_repo(&repo, request.number, Some(&token))?;
+        let target_repo = self.resolve_write_target_repo(&repo, request.number, Some(&token))?;
         let comment = self
             .client
             .create_pull_request_comment(
@@ -73,6 +73,60 @@ impl PrService {
             &target_repo,
             request.number,
             comment,
+        ))
+    }
+
+    pub fn review(&self, request: PrReviewRequest) -> Result<CommandOutcome, CommandError> {
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: crate::command::EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for pr review".to_string()),
+            })?
+            .token;
+
+        let repo = resolve_repo(request.repo.as_deref())?;
+        let comment_body = match request.action {
+            PrReviewAction::Approve => None,
+            PrReviewAction::Comment(body) => Some(read_required_body(body)?),
+        };
+        let target_repo = self.resolve_write_target_repo(&repo, request.number, Some(&token))?;
+        let result = match comment_body {
+            None => {
+                self.client
+                    .approve_pull_request(
+                        &target_repo.owner,
+                        &target_repo.name,
+                        request.number,
+                        &token,
+                    )
+                    .map_err(map_pull_request_error)?;
+                PrReviewResult::Approved
+            }
+            Some(body) => {
+                let comment = self
+                    .client
+                    .create_pull_request_comment(
+                        &target_repo.owner,
+                        &target_repo.name,
+                        request.number,
+                        &token,
+                        &CreatePullRequestComment { body: &body },
+                    )
+                    .map_err(map_pull_request_error)?
+                    .into();
+                PrReviewResult::Comment(comment)
+            }
+        };
+
+        Ok(render_pr_review(
+            request.output,
+            &target_repo,
+            request.number,
+            result,
         ))
     }
 
@@ -482,7 +536,7 @@ impl PrService {
         }
     }
 
-    fn resolve_comment_target_repo(
+    fn resolve_write_target_repo(
         &self,
         repo: &ResolvedRepo,
         number: u64,
@@ -651,6 +705,18 @@ pub struct PrCommentRequest {
     pub body: PrTextSource,
 }
 
+pub struct PrReviewRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub number: u64,
+    pub action: PrReviewAction,
+}
+
+pub enum PrReviewAction {
+    Approve,
+    Comment(PrTextSource),
+}
+
 pub struct PrEditRequest {
     pub output: OutputFormat,
     pub repo: Option<String>,
@@ -702,6 +768,11 @@ struct PrCheckoutResult {
     head_repository: String,
     created: bool,
     current_branch: String,
+}
+
+enum PrReviewResult {
+    Approved,
+    Comment(PullRequestComment),
 }
 
 pub enum PrTextSource {
@@ -843,6 +914,53 @@ fn render_pr_comment(
             EXIT_OK,
             format!(
                 "Commented on pull request #{number}\ncomment id: {}\nrepository: {}/{}\nauthor: {}\nurl: {}",
+                comment.id, repo.owner, repo.name, comment.author, comment.html_url,
+            ),
+        ),
+    }
+}
+
+fn render_pr_review(
+    output: OutputFormat,
+    repo: &ResolvedRepo,
+    number: u64,
+    result: PrReviewResult,
+) -> CommandOutcome {
+    match (output, result) {
+        (OutputFormat::Json { .. }, PrReviewResult::Approved) => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "action": "approve",
+                "repository": format!("{}/{}", repo.owner, repo.name),
+                "pull_request": number,
+            }),
+        ),
+        (OutputFormat::Text, PrReviewResult::Approved) => CommandOutcome::text(
+            EXIT_OK,
+            format!(
+                "Approved pull request #{number}\nrepository: {}/{}",
+                repo.owner, repo.name,
+            ),
+        ),
+        (OutputFormat::Json { .. }, PrReviewResult::Comment(comment)) => CommandOutcome::json(
+            EXIT_OK,
+            json!({
+                "action": "comment",
+                "id": comment.id,
+                "body": comment.body,
+                "author": comment.author,
+                "repository": format!("{}/{}", repo.owner, repo.name),
+                "pull_request": number,
+                "html_url": comment.html_url,
+                "created_at": comment.created_at,
+                "updated_at": comment.updated_at,
+                "comment_type": comment.comment_type,
+            }),
+        ),
+        (OutputFormat::Text, PrReviewResult::Comment(comment)) => CommandOutcome::text(
+            EXIT_OK,
+            format!(
+                "Reviewed pull request #{number} with a comment\ncomment id: {}\nrepository: {}/{}\nauthor: {}\nurl: {}",
                 comment.id, repo.owner, repo.name, comment.author, comment.html_url,
             ),
         ),

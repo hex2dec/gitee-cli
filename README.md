@@ -34,7 +34,7 @@ automation and day-to-day development:
 - checking whether auth is usable before starting work
 - inspecting repository metadata from a slug or a local checkout
 - reading issue history before making a change
-- viewing, listing, creating, merging, commenting on, and checking out pull requests
+- viewing, listing, creating, merging, reviewing, commenting on, and checking out pull requests
 - producing stable `--json` output and meaningful exit codes for scripts
 
 The project is intentionally opinionated:
@@ -194,6 +194,21 @@ Comment on a pull request:
 gitee pr comment 42 --repo octo/demo --body "Ship it" --json
 ```
 
+Approve a pull request:
+
+```bash
+gitee pr review 42 --repo octo/demo --approve --json
+```
+
+Post review feedback:
+
+```bash
+gitee pr review 42 --comment --body "Looks good" --json
+```
+
+Gitee does not expose a GitHub-style request-changes review state. Comment
+reviews require a body, while approval reviews do not accept body input.
+
 Merge a pull request:
 
 ```bash
@@ -221,6 +236,7 @@ Commands that can use local repository context include:
 - `pr view`
 - `pr list`
 - `pr comment`
+- `pr review`
 - `pr create`
 - `pr merge`
 - `pr checkout`
@@ -251,6 +267,7 @@ Commands that require authentication:
 - `auth login`
 - `issue comment`
 - `pr comment`
+- `pr review`
 - `pr create`
 - `pr merge`
 - `pr status`

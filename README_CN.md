@@ -34,7 +34,7 @@ gitee help --json
 - 在执行任务前先确认认证是否可用
 - 通过仓库 slug 或本地 checkout 检查仓库元数据
 - 在修改代码前先阅读 Issue 上下文
-- 在终端里查看、列出、创建、合并、评论和检出 Pull Request
+- 在终端里查看、列出、创建、合并、审查、评论和检出 Pull Request
 - 为脚本提供稳定的 `--json` 输出和明确的退出码
 
 这个项目是有明确取舍的：
@@ -193,6 +193,21 @@ gitee pr create --repo octo/demo --head feature/body-file --title "Read body fil
 gitee pr comment 42 --repo octo/demo --body "Ship it" --json
 ```
 
+批准一个 Pull Request：
+
+```bash
+gitee pr review 42 --repo octo/demo --approve --json
+```
+
+提交审查意见：
+
+```bash
+gitee pr review 42 --comment --body "Looks good" --json
+```
+
+Gitee 没有提供与 GitHub 相同的 request-changes 审查状态。评论式审查必须
+提供正文，而批准审查不接受正文参数。
+
 合并一个 Pull Request：
 
 ```bash
@@ -219,6 +234,7 @@ gitee pr checkout 42 --repo octo/demo --json
 - `pr view`
 - `pr list`
 - `pr comment`
+- `pr review`
 - `pr create`
 - `pr merge`
 - `pr checkout`
@@ -248,6 +264,7 @@ gitee pr checkout 42 --repo octo/demo --json
 - `auth login`
 - `issue comment`
 - `pr comment`
+- `pr review`
 - `pr create`
 - `pr merge`
 - `pr status`

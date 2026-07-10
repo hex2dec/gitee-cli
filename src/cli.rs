@@ -11,7 +11,8 @@ use crate::issue::{
 };
 use crate::pr::{
     PrCheckoutRequest, PrCommentRequest, PrCreateRequest, PrEditRequest, PrListRequest,
-    PrMergeMethod, PrMergeRequest, PrService, PrStatusRequest, PrTextSource, PrViewRequest,
+    PrMergeMethod, PrMergeRequest, PrReviewAction, PrReviewRequest, PrService, PrStatusRequest,
+    PrTextSource, PrViewRequest,
 };
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
 
@@ -179,6 +180,7 @@ fn run_pr(args: &[String]) -> Result<CommandOutcome, CommandError> {
         "edit" => execute_parsed(parse_pr_edit_args(rest), |request| pr.edit(request)),
         "list" => execute_parsed(parse_pr_list_args(rest), |request| pr.list(request)),
         "merge" => execute_parsed(parse_pr_merge_args(rest), |request| pr.merge(request)),
+        "review" => execute_parsed(parse_pr_review_args(rest), |request| pr.review(request)),
         "status" => execute_parsed(parse_pr_status_args(rest), |request| pr.status(request)),
         "view" => execute_parsed(parse_pr_view_args(rest), |request| pr.view(request)),
         _ => Err(CommandError::usage("unsupported command")),
@@ -294,6 +296,10 @@ fn resolve_help_topic(path: &[String]) -> Option<HelpTopic> {
         ["pr", "merge"] => Some(HelpTopic {
             text_command: pr_merge_command,
             json: pr_merge_help_json,
+        }),
+        ["pr", "review"] => Some(HelpTopic {
+            text_command: pr_review_command,
+            json: pr_review_help_json,
         }),
         ["pr", "status"] => Some(HelpTopic {
             text_command: pr_status_command,
@@ -659,6 +665,80 @@ fn parse_pr_comment_args(args: &[String]) -> Result<ParseOutcome<PrCommentReques
             repo,
             number,
             body,
+        })
+    })
+}
+
+fn parse_pr_review_args(args: &[String]) -> Result<ParseOutcome<PrReviewRequest>, CommandError> {
+    map_parsed(parse_matches(pr_review_command(), args), |matches| {
+        let output = output_format(&matches);
+        validate_json_field_selection(&output, "pr review", &[])?;
+        let repo = last_value(&matches, "repo");
+        let body_values = values(&matches, "body");
+        let body_file_values = values(&matches, "body_file");
+        let positionals = values(&matches, "positionals");
+
+        let Some(number) = positionals.first() else {
+            return Err(CommandError::usage(
+                "pr review requires a pull request number",
+            ));
+        };
+
+        if positionals.len() > 1 {
+            return Err(CommandError::usage(
+                "pr review accepts exactly one pull request number",
+            ));
+        }
+
+        let approve_count = flag_count(&matches, "approve");
+        let comment_count = flag_count(&matches, "comment");
+
+        if approve_count + comment_count != 1 {
+            return Err(CommandError::usage(
+                "provide exactly one of --approve or --comment",
+            ));
+        }
+
+        if body_values.len() + body_file_values.len() > 1 {
+            return Err(CommandError::usage(
+                "provide only one of --body or --body-file",
+            ));
+        }
+
+        let number = number.parse::<u64>().map_err(|_| {
+            CommandError::usage("invalid pull request number: expected a positive integer")
+        })?;
+
+        let body = body_values
+            .last()
+            .map(|value| PrTextSource::Inline(value.clone()))
+            .or_else(|| {
+                body_file_values
+                    .last()
+                    .map(|value| PrTextSource::File(value.clone()))
+            });
+
+        let action = if approve_count == 1 {
+            if body.is_some() {
+                return Err(CommandError::usage(
+                    "review body is not supported with --approve",
+                ));
+            }
+            PrReviewAction::Approve
+        } else {
+            let Some(body) = body else {
+                return Err(CommandError::usage(
+                    "pr review --comment requires --body or --body-file",
+                ));
+            };
+            PrReviewAction::Comment(body)
+        };
+
+        Ok(PrReviewRequest {
+            output,
+            repo,
+            number,
+            action,
         })
     })
 }
@@ -1111,13 +1191,14 @@ fn issue_help_command() -> Command {
 
 fn pr_help_command() -> Command {
     base_command("pr", "gitee pr")
-        .about("View, create, edit, merge, comment on, and check out pull requests")
+        .about("View, create, edit, merge, review, comment on, and check out pull requests")
         .subcommand(pr_checkout_command())
         .subcommand(pr_comment_command())
         .subcommand(pr_create_command())
         .subcommand(pr_edit_command())
         .subcommand(pr_list_command())
         .subcommand(pr_merge_command())
+        .subcommand(pr_review_command())
         .subcommand(pr_status_command())
         .subcommand(pr_view_command())
 }
@@ -1304,6 +1385,48 @@ fn pr_comment_command() -> Command {
             "PATH",
             "Read comment body text from a file",
         ))
+        .arg(positionals_arg("positionals", "PR", "Pull request number"))
+}
+
+fn pr_review_command() -> Command {
+    base_command("review", "gitee pr review")
+        .about("Add a review to a pull request")
+        .arg(json_flag())
+        .arg(repo_option())
+        .arg(
+            Arg::new("approve")
+                .short('a')
+                .long("approve")
+                .action(ArgAction::Count)
+                .help("Approve the pull request"),
+        )
+        .arg(
+            Arg::new("comment")
+                .short('c')
+                .long("comment")
+                .action(ArgAction::Count)
+                .help("Comment on the pull request"),
+        )
+        .arg(
+            Arg::new("body")
+                .short('b')
+                .long("body")
+                .action(ArgAction::Append)
+                .num_args(1)
+                .value_name("BODY")
+                .allow_hyphen_values(true)
+                .help("Inline review body text"),
+        )
+        .arg(
+            Arg::new("body_file")
+                .short('F')
+                .long("body-file")
+                .action(ArgAction::Append)
+                .num_args(1)
+                .value_name("PATH")
+                .allow_hyphen_values(true)
+                .help("Read review body text from a file"),
+        )
         .arg(positionals_arg("positionals", "PR", "Pull request number"))
 }
 
@@ -1875,7 +1998,7 @@ fn pr_help_json() -> serde_json::Value {
     help_group_json(
         "pr",
         "pr",
-        "View, create, edit, merge, comment on, and check out pull requests",
+        "View, create, edit, merge, review, comment on, and check out pull requests",
         "gh pr",
         vec![
             pr_checkout_help_json(),
@@ -1884,6 +2007,7 @@ fn pr_help_json() -> serde_json::Value {
             pr_edit_help_json(),
             pr_list_help_json(),
             pr_merge_help_json(),
+            pr_review_help_json(),
             pr_status_help_json(),
             pr_view_help_json(),
         ],
@@ -1948,6 +2072,45 @@ fn pr_comment_help_json() -> serde_json::Value {
         ],
         vec![
             "Provide exactly one of --body or --body-file.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn pr_review_help_json() -> serde_json::Value {
+    help_command_json(
+        "review",
+        "pr review",
+        "Add a review to a pull request",
+        "gh pr review",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json("--approve", None, "Approve the pull request", false),
+            help_option_json("--comment", None, "Comment on the pull request", false),
+            help_option_json("--body", Some("BODY"), "Inline review body text", false),
+            help_option_json(
+                "--body-file",
+                Some("PATH"),
+                "Read review body text from a file",
+                false,
+            ),
+        ],
+        vec![help_argument_json("pr", "PR", "Pull request number", true)],
+        vec!["--body", "--body-file"],
+        vec![
+            "gitee pr review 42 --repo octo/demo --approve --json",
+            "gitee pr review 42 --comment --body \"Looks good\" --json",
+        ],
+        vec![
+            "Provide exactly one of --approve or --comment.",
+            "Comment reviews require --body or --body-file.",
+            "Review body input is not supported with --approve.",
             "When --repo is omitted, the command can infer the repository from local git context.",
         ],
     )
