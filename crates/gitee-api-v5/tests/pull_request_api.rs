@@ -187,6 +187,64 @@ fn create_pull_request_comment_sends_token_query_and_form_body() {
 }
 
 #[test]
+fn approve_pull_request_maps_invalid_token_response() {
+    let server = MockServer::start();
+    let review_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/pulls/42/review")
+            .query_param("access_token", "bad-token");
+        then.status(400).json_body(serde_json::json!({
+            "message": "401 Unauthorized"
+        }));
+    });
+
+    let result = client_for(&server).approve_pull_request("octo", "demo", 42, "bad-token");
+
+    assert!(matches!(result, Err(PullRequestError::InvalidToken)));
+    review_mock.assert_hits(1);
+}
+
+#[test]
+fn approve_pull_request_sends_token_to_review_endpoint() {
+    let server = MockServer::start();
+    let review_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/pulls/42/review")
+            .query_param("access_token", "secret-token");
+        then.status(201);
+    });
+
+    client_for(&server)
+        .approve_pull_request("octo", "demo", 42, "secret-token")
+        .expect("pull request approval should succeed");
+
+    review_mock.assert_hits(1);
+}
+
+#[test]
+fn approve_pull_request_preserves_non_auth_validation_errors() {
+    let server = MockServer::start();
+    let review_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/pulls/42/review")
+            .query_param("access_token", "secret-token");
+        then.status(400).json_body(serde_json::json!({
+            "message": "pull request has already been reviewed"
+        }));
+    });
+
+    let result = client_for(&server).approve_pull_request("octo", "demo", 42, "secret-token");
+
+    match result {
+        Err(PullRequestError::UnexpectedStatusWithMessage(400, message)) => {
+            assert_eq!(message, "pull request has already been reviewed");
+        }
+        _ => panic!("expected the remote validation error"),
+    }
+    review_mock.assert_hits(1);
+}
+
+#[test]
 fn merge_pull_request_sends_merge_method_and_parses_response() {
     let server = MockServer::start();
     let merge_mock = server.mock(|when, then| {

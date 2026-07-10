@@ -256,6 +256,55 @@ impl GiteeClient {
         ))
     }
 
+    pub fn approve_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        token: &str,
+    ) -> Result<(), PullRequestError> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/v5/repos/{owner}/{repo}/pulls/{number}/review",
+                self.base_url
+            ))
+            .query(&[("access_token", token)])
+            .send()
+            .map_err(PullRequestError::Transport)?;
+
+        if response.status().is_success() {
+            return Ok(());
+        }
+
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        let invalid_token_message = error_message.as_deref().is_some_and(|message| {
+            let message = message.to_ascii_lowercase();
+            message.contains("401")
+                || message.contains("unauthorized")
+                || message.contains("invalid token")
+                || message.contains("invalid access token")
+        });
+
+        if status == 401 || (status == 400 && invalid_token_message) {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if status == 404 {
+            return Err(PullRequestError::NotFound);
+        }
+
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
+    }
+
     pub fn create_pull_request(
         &self,
         owner: &str,

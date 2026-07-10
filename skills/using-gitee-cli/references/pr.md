@@ -190,6 +190,42 @@ gitee pr comment 42 --repo octo/demo --body "Ship it" --json
 gitee pr comment 42 --body-file ./comment.md --json
 ```
 
+## `gitee pr review`
+
+- `gh` equivalent: `gh pr review`
+- Summary: approve a pull request or post review feedback.
+- Auth: `required`
+- Local git required: no
+- Repo inference: yes
+- Syntax:
+
+```bash
+gitee pr review <PR> [--repo <OWNER/REPO>] (--approve | --comment) [--body <TEXT> | --body-file <PATH>] [--json]
+```
+
+- Arguments:
+  - `<PR>`: pull request number
+- Flags:
+  - `--repo <OWNER/REPO>`: target repository
+  - `-a, --approve`: approve the pull request
+  - `-c, --comment`: post review feedback
+  - `-b, --body <TEXT>`: inline review body
+  - `-F, --body-file <PATH>`: read review body from a file; use `-` for stdin
+  - `--json`: output machine-readable JSON
+- Notes:
+  - Provide exactly one of `--approve` or `--comment`.
+  - Comment reviews require exactly one body source.
+  - Approval reviews do not accept `--body` or `--body-file`.
+  - Gitee does not expose a GitHub-style request-changes review state, so this command does not provide `--request-changes`.
+  - When `--repo` is omitted, the command can infer the repository from local git context.
+- Examples:
+
+```bash
+gitee pr review 42 --repo octo/demo --approve --json
+gitee pr review 42 --comment --body "Looks good" --json
+printf 'Generated review\n' | gitee pr review 42 -c -F - --json
+```
+
 ## `gitee pr status`
 
 - `gh` equivalent: `gh pr status`

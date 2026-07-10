@@ -178,6 +178,55 @@ fn help_json_can_describe_pr_merge() {
 }
 
 #[test]
+fn help_describes_pr_review_and_gh_style_aliases() {
+    let text_output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "pr", "review"])
+        .output()
+        .unwrap();
+
+    assert_eq!(text_output.status.code(), Some(0));
+    assert!(text_output.stderr.is_empty());
+
+    let stdout = String::from_utf8_lossy(&text_output.stdout);
+    assert!(stdout.contains("Add a review to a pull request"));
+    assert!(stdout.contains("-a, --approve"));
+    assert!(stdout.contains("-c, --comment"));
+    assert!(stdout.contains("-b, --body <BODY>"));
+    assert!(stdout.contains("-F, --body-file <PATH>"));
+
+    let json_output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "pr", "review", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(json_output.status.code(), Some(0));
+    assert!(json_output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert_eq!(body["path"], "pr review");
+    assert_eq!(body["gh_equivalent"], "gh pr review");
+    assert_eq!(body["auth"], "required");
+    assert_eq!(body["repo_inference"], true);
+
+    let flags = body["flags"].as_array().unwrap();
+    assert!(flags.iter().any(|flag| flag["name"] == "--approve"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--comment"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--body"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--body-file"));
+
+    let input_sources = body["input_sources"].as_array().unwrap();
+    assert_eq!(
+        input_sources,
+        &[
+            Value::String("--body".to_string()),
+            Value::String("--body-file".to_string())
+        ]
+    );
+}
+
+#[test]
 fn help_json_describes_json_field_selection_for_list_and_status_commands() {
     let pr_list_output = Command::cargo_bin("gitee")
         .unwrap()
