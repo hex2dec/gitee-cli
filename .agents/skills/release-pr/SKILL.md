@@ -13,7 +13,12 @@ Stop after the PR is open. Do not create a tag or publish a GitHub release unles
 - Target version in semver form, for example `0.2.0`
 - Optional base branch; default to `main`
 
-If the version is missing, ask for it before making changes.
+If the version is missing, recommend one before making changes:
+
+- Read the current `[package].version` from `Cargo.toml`.
+- Inspect release-relevant changes since the latest reachable `v*` tag with `git log --oneline <tag>..HEAD` and, when useful, `git diff --stat <tag>..HEAD`.
+- Recommend only a minor or patch bump: minor for new commands, flags, or user-visible behavior; patch for fixes, documentation, tests, and internal maintenance.
+- Ask the user to confirm `v<recommended>` with a one-sentence rationale, or provide a different valid semver, before editing files.
 
 ## Preconditions
 
