@@ -144,9 +144,9 @@ jobs:
             exit 1
           fi
 
-          npm publish npm-packages/gitee-cli-darwin-arm64 --access public --provenance --tag latest
-          npm publish npm-packages/gitee-cli-linux-x64 --access public --provenance --tag latest
-          npm publish npm-packages/gitee-cli --access public --provenance --tag latest
+          npm publish ./npm-packages/gitee-cli-darwin-arm64 --access public --provenance --tag latest
+          npm publish ./npm-packages/gitee-cli-linux-x64 --access public --provenance --tag latest
+          npm publish ./npm-packages/gitee-cli --access public --provenance --tag latest
 
       - name: Create or update draft GitHub release
         uses: softprops/action-gh-release@v2

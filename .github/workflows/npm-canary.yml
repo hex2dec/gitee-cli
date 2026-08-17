@@ -132,9 +132,9 @@ jobs:
             exit 1
           fi
 
-          npm publish npm-packages/gitee-cli-darwin-arm64 --access public --provenance --tag canary
-          npm publish npm-packages/gitee-cli-linux-x64 --access public --provenance --tag canary
-          npm publish npm-packages/gitee-cli --access public --provenance --tag canary
+          npm publish ./npm-packages/gitee-cli-darwin-arm64 --access public --provenance --tag canary
+          npm publish ./npm-packages/gitee-cli-linux-x64 --access public --provenance --tag canary
+          npm publish ./npm-packages/gitee-cli --access public --provenance --tag canary
 
           npm dist-tag add "@pkg-in/gitee-cli-darwin-arm64@${CANARY_VERSION}" "${COMMIT_TAG}"
           npm dist-tag add "@pkg-in/gitee-cli-linux-x64@${CANARY_VERSION}" "${COMMIT_TAG}"
