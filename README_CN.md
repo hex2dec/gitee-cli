@@ -78,13 +78,14 @@ cargo build --release
 
 ## 在 Coding Agent 中安装内置 Skill
 
-在 Codex、Claude Code 等 coding agent 中，直接把内置的 [`using-gitee-cli` skill](https://raw.githubusercontent.com/hex2dec/gitee-cli/main/skills/using-gitee-cli/SKILL.md) 链接发给 agent 并要求它安装即可，agent 会自动完成安装。
+将内置的 `using-gitee-cli` skill 安装到 `~/.agents/skills`：
 
-示例指令：
-
-```text
-请安装这个 skill：[using-gitee-cli](https://raw.githubusercontent.com/hex2dec/gitee-cli/main/skills/using-gitee-cli/SKILL.md)。
+```bash
+gitee skills install
 ```
+
+使用 `gitee skills list` 检查安装状态，使用 `gitee skills uninstall` 移除。
+这三个命令都支持 `--json`。
 
 ## 常见工作流
 

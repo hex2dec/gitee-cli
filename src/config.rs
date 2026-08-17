@@ -178,7 +178,7 @@ fn config_dir() -> PathBuf {
         .join(FALLBACK_CONFIG_DIR_NAME)
 }
 
-fn home_dir() -> Option<PathBuf> {
+pub fn home_dir() -> Option<PathBuf> {
     if let Ok(path) = env::var("HOME") {
         let path = path.trim();
         if !path.is_empty() {

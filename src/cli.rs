@@ -15,6 +15,7 @@ use crate::pr::{
     PrTextSource, PrViewRequest,
 };
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
+use crate::skills::SkillsService;
 
 enum ParseOutcome<T> {
     Value(T),
@@ -111,6 +112,7 @@ pub fn run(args: Vec<String>) -> Result<CommandOutcome, CommandError> {
         "issue" => run_issue(rest),
         "pr" => run_pr(rest),
         "repo" => run_repo(rest),
+        "skills" => run_skills(rest),
         _ => Err(CommandError::usage("unsupported command")),
     }
 }
@@ -202,6 +204,31 @@ fn run_repo(args: &[String]) -> Result<CommandOutcome, CommandError> {
     match subcommand.as_str() {
         "clone" => execute_parsed(parse_repo_clone_args(rest), |request| repo.clone(request)),
         "view" => execute_parsed(parse_repo_view_args(rest), |request| repo.view(request)),
+        _ => Err(CommandError::usage("unsupported command")),
+    }
+}
+
+fn run_skills(args: &[String]) -> Result<CommandOutcome, CommandError> {
+    let Some((subcommand, rest)) = args.split_first() else {
+        return Err(CommandError::usage("missing skills subcommand"));
+    };
+
+    if is_help_flag(subcommand) {
+        return Ok(render_help(skills_help_command()));
+    }
+
+    match subcommand.as_str() {
+        "install" => execute_parsed(
+            parse_output_only(rest, skills_install_command()),
+            |output| SkillsService::from_env()?.install(output),
+        ),
+        "uninstall" | "remove" => execute_parsed(
+            parse_output_only(rest, skills_uninstall_command()),
+            |output| SkillsService::from_env()?.uninstall(output),
+        ),
+        "list" | "ls" => execute_parsed(parse_output_only(rest, skills_list_command()), |output| {
+            Ok(SkillsService::from_env()?.list(output))
+        }),
         _ => Err(CommandError::usage("unsupported command")),
     }
 }
@@ -325,6 +352,22 @@ fn resolve_help_topic(path: &[String]) -> Option<HelpTopic> {
         ["repo", "view"] => Some(HelpTopic {
             text_command: repo_view_command,
             json: repo_view_help_json,
+        }),
+        ["skills"] => Some(HelpTopic {
+            text_command: skills_help_command,
+            json: skills_help_json,
+        }),
+        ["skills", "install"] => Some(HelpTopic {
+            text_command: skills_install_command,
+            json: skills_install_help_json,
+        }),
+        ["skills", "uninstall"] | ["skills", "remove"] => Some(HelpTopic {
+            text_command: skills_uninstall_command,
+            json: skills_uninstall_help_json,
+        }),
+        ["skills", "list"] | ["skills", "ls"] => Some(HelpTopic {
+            text_command: skills_list_command,
+            json: skills_list_help_json,
         }),
         _ => None,
     }
@@ -1083,15 +1126,14 @@ fn parse_matches(
     argv.push(command.get_name().to_string());
     argv.extend(args.iter().cloned());
 
-    match command.try_get_matches_from(argv) {
+    match command.clone().try_get_matches_from(argv) {
         Ok(matches) => Ok(ParseOutcome::Value(matches)),
         Err(error) => match error.kind() {
-            clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
-                Ok(ParseOutcome::Help(CommandOutcome::text(
-                    EXIT_OK,
-                    error.to_string().trim_end().to_string(),
-                )))
-            }
+            clap::error::ErrorKind::DisplayHelp => Ok(ParseOutcome::Help(render_help(command))),
+            clap::error::ErrorKind::DisplayVersion => Ok(ParseOutcome::Help(CommandOutcome::text(
+                EXIT_OK,
+                error.to_string().trim_end().to_string(),
+            ))),
             _ => Err(map_clap_error(error)),
         },
     }
@@ -1231,6 +1273,7 @@ fn root_help_command() -> Command {
         .subcommand(issue_help_command())
         .subcommand(pr_help_command())
         .subcommand(repo_help_command())
+        .subcommand(skills_help_command())
 }
 
 fn auth_help_command() -> Command {
@@ -1272,6 +1315,14 @@ fn repo_help_command() -> Command {
         .subcommand(repo_view_command())
 }
 
+fn skills_help_command() -> Command {
+    base_command("skills", "gitee skills")
+        .about("Manage the bundled using-gitee-cli skill")
+        .subcommand(skills_install_command())
+        .subcommand(skills_uninstall_command())
+        .subcommand(skills_list_command())
+}
+
 fn auth_status_command() -> Command {
     output_only_command("status", "gitee auth status")
         .about("Check whether authentication is currently usable")
@@ -1297,6 +1348,23 @@ fn auth_login_command() -> Command {
 fn auth_logout_command() -> Command {
     output_only_command("logout", "gitee auth logout")
         .about("Remove the saved token from local config")
+}
+
+fn skills_install_command() -> Command {
+    output_only_command("install", "gitee skills install")
+        .about("Install the bundled using-gitee-cli skill into ~/.agents/skills")
+}
+
+fn skills_uninstall_command() -> Command {
+    output_only_command("uninstall", "gitee skills uninstall")
+        .visible_alias("remove")
+        .about("Remove the bundled using-gitee-cli skill from ~/.agents/skills")
+}
+
+fn skills_list_command() -> Command {
+    output_only_command("list", "gitee skills list")
+        .visible_alias("ls")
+        .about("List the bundled using-gitee-cli skill installation status")
 }
 
 fn issue_list_command() -> Command {
@@ -1797,7 +1865,8 @@ fn root_help_json() -> serde_json::Value {
             auth_help_json(),
             issue_help_json(),
             pr_help_json(),
-            repo_help_json()
+            repo_help_json(),
+            skills_help_json()
         ]
     })
 }
@@ -2602,6 +2671,101 @@ fn repo_clone_help_json() -> serde_json::Value {
         vec![
             "Use at most one of --https or --ssh.",
             "When neither flag is provided, the CLI uses a saved clone protocol preference or prompts on first use.",
+        ],
+    )
+}
+
+fn skills_help_json() -> serde_json::Value {
+    help_group_json(
+        "skills",
+        "skills",
+        "Manage the bundled using-gitee-cli skill",
+        "not_applicable",
+        vec![
+            skills_install_help_json(),
+            skills_uninstall_help_json(),
+            skills_list_help_json(),
+        ],
+    )
+}
+
+fn skills_install_help_json() -> serde_json::Value {
+    help_command_json(
+        "install",
+        "skills install",
+        "Install the bundled using-gitee-cli skill into ~/.agents/skills",
+        "not_applicable",
+        true,
+        "not_required",
+        false,
+        false,
+        false,
+        vec![help_option_json(
+            "--json",
+            None,
+            "Output machine-readable JSON",
+            false,
+        )],
+        Vec::new(),
+        Vec::new(),
+        vec!["gitee skills install", "gitee skills install --json"],
+        vec![
+            "Installs to ~/.agents/skills/using-gitee-cli.",
+            "Existing using-gitee-cli installations are overwritten.",
+        ],
+    )
+}
+
+fn skills_uninstall_help_json() -> serde_json::Value {
+    help_command_json(
+        "uninstall",
+        "skills uninstall",
+        "Remove the bundled using-gitee-cli skill from ~/.agents/skills",
+        "not_applicable",
+        true,
+        "not_required",
+        false,
+        false,
+        false,
+        vec![help_option_json(
+            "--json",
+            None,
+            "Output machine-readable JSON",
+            false,
+        )],
+        Vec::new(),
+        Vec::new(),
+        vec!["gitee skills uninstall", "gitee skills remove --json"],
+        vec![
+            "Alias: remove.",
+            "Missing installations are treated as a successful no-op.",
+        ],
+    )
+}
+
+fn skills_list_help_json() -> serde_json::Value {
+    help_command_json(
+        "list",
+        "skills list",
+        "List the bundled using-gitee-cli skill installation status",
+        "not_applicable",
+        true,
+        "not_required",
+        false,
+        false,
+        false,
+        vec![help_option_json(
+            "--json",
+            None,
+            "Output machine-readable JSON",
+            false,
+        )],
+        Vec::new(),
+        Vec::new(),
+        vec!["gitee skills list", "gitee skills ls --json"],
+        vec![
+            "Alias: ls.",
+            "Only reports the bundled using-gitee-cli skill; it does not scan all installed skills.",
         ],
     )
 }
