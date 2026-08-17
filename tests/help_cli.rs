@@ -155,6 +155,35 @@ fn help_json_can_describe_pr_edit() {
 }
 
 #[test]
+fn help_json_can_describe_issue_edit() {
+    let output = Command::cargo_bin("gitee")
+        .unwrap()
+        .args(["help", "issue", "edit", "--json"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+
+    let body: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(body["path"], "issue edit");
+    assert_eq!(body["gh_equivalent"], "gh issue edit");
+    assert_eq!(body["auth"], "required");
+    assert_eq!(body["repo_inference"], true);
+
+    let flags = body["flags"].as_array().unwrap();
+    assert!(flags.iter().any(|flag| flag["name"] == "--title"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--body"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--body-file"));
+    assert!(flags.iter().any(|flag| flag["name"] == "--state"));
+    assert!(!flags.iter().any(|flag| flag["name"] == "--add-label"));
+
+    let examples = body["examples"].as_array().unwrap();
+    assert!(examples.iter().any(|example| example
+        == "gitee issue edit I123 --repo octo/demo --state open --json number,title,url"));
+}
+
+#[test]
 fn help_json_can_describe_pr_merge() {
     let output = Command::cargo_bin("gitee")
         .unwrap()

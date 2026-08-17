@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use gitee_api_v5::{
     CreateIssue, GiteeClient, IssueCommentResponse, IssueError, IssueListOptions, IssueResponse,
+    UpdateIssue,
 };
 use serde_json::json;
 
@@ -157,6 +158,57 @@ impl IssueService {
         ))
     }
 
+    pub fn edit(&self, request: IssueEditRequest) -> Result<CommandOutcome, CommandError> {
+        let resolved = resolve_issue_repo(request.repo.as_deref())?;
+        let body = match request.body {
+            Some(source) => Some(read_issue_body(
+                source,
+                "failed to read issue body from stdin",
+                "failed to read issue body file",
+            )?),
+            None => None,
+        };
+        let token = self
+            .config
+            .load_runtime_token()
+            .map_err(CommandError::config)?
+            .ok_or_else(|| CommandError {
+                code: EXIT_AUTH,
+                stdout: None,
+                stderr: Some("authentication required for issue edit".to_string()),
+            })?
+            .token;
+        let issue = self
+            .client
+            .update_issue(
+                &resolved.owner,
+                &request.number,
+                &token,
+                &UpdateIssue {
+                    repo: &resolved.name,
+                    title: request.title.as_deref(),
+                    body: body.as_deref(),
+                    state: request.state.as_deref(),
+                },
+            )
+            .map_err(|error| map_issue_error(error, "issue not found"))?
+            .into();
+
+        Ok(render_issue_view(
+            request.output,
+            IssueView {
+                source: resolved.source,
+                owner: resolved.owner,
+                name: resolved.name,
+                issue,
+                comments_included: false,
+                comments_page: None,
+                comments_per_page: None,
+                comments: None,
+            },
+        ))
+    }
+
     pub fn comment(&self, request: IssueCommentRequest) -> Result<CommandOutcome, CommandError> {
         let resolved = resolve_issue_repo(request.repo.as_deref())?;
         let body = read_required_issue_body(
@@ -223,6 +275,15 @@ pub struct IssueCreateRequest {
     pub repo: Option<String>,
     pub title: String,
     pub body: Option<IssueBodySource>,
+}
+
+pub struct IssueEditRequest {
+    pub output: OutputFormat,
+    pub repo: Option<String>,
+    pub number: String,
+    pub title: Option<String>,
+    pub body: Option<IssueBodySource>,
+    pub state: Option<String>,
 }
 
 pub struct IssueCommentRequest {

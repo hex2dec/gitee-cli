@@ -149,6 +149,12 @@ gitee issue view I123 --repo octo/demo --json
 gitee issue view I123 --repo octo/demo --comments --page 1 --per-page 20 --json
 ```
 
+修改 Issue 的标题、正文或状态：
+
+```bash
+gitee issue edit I123 --repo octo/demo --title "Updated title" --state closed --json
+```
+
 以非交互方式发布一条跟进评论：
 
 ```bash
@@ -230,6 +236,7 @@ gitee pr checkout 42 --repo octo/demo --json
 - `repo view`
 - `issue list`
 - `issue view`
+- `issue edit`
 - `issue comment`
 - `pr view`
 - `pr list`
@@ -262,6 +269,7 @@ gitee pr checkout 42 --repo octo/demo --json
 需要认证的命令包括：
 
 - `auth login`
+- `issue edit`
 - `issue comment`
 - `pr comment`
 - `pr review`

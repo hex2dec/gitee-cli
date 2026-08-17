@@ -9,7 +9,7 @@ pub use auth::AuthError;
 pub use client::GiteeClient;
 pub use issue::{
     CreateIssue, IssueCommentResponse, IssueError, IssueListOptions, IssueResponse,
-    IssueUserResponse,
+    IssueUserResponse, UpdateIssue,
 };
 pub use pull_request::{
     CreatePullRequest, CreatePullRequestComment, MergePullRequest, PullRequestBranchResponse,
