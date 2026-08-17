@@ -73,12 +73,10 @@ The npm package includes prebuilt binaries for:
 - Apple Silicon macOS: `aarch64-apple-darwin`
 - Linux x86_64: `x86_64-unknown-linux-musl`
 
-Commit builds from the `main` branch are published under the `canary` dist-tag,
-with commit-specific tags for repeatable installs:
+Commit builds from the `main` branch are published under the `canary` dist-tag:
 
 ```bash
 npm install -g @pkg-in/gitee-cli@canary
-npm install -g @pkg-in/gitee-cli@commit-abc1234
 ```
 
 If you do not use npm, download the matching archive from the GitHub Releases

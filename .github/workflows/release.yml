@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   build:
@@ -18,30 +17,19 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
-            npm_platform: darwin-arm64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            npm_platform: linux-x64
 
     env:
       ASSET_BASENAME: gitee-${{ github.ref_name }}-${{ matrix.target }}
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+        uses: actions/checkout@v5
 
       - name: Read Rust version
         id: rust-version
         run: echo "version=$(awk '/^rust / { print $2 }' .tool-versions)" >> "$GITHUB_OUTPUT"
-
-      - name: Read package version
-        id: package-version
-        run: echo "version=$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)" >> "$GITHUB_OUTPUT"
 
       - name: Install Rust toolchain
         run: |
@@ -65,27 +53,11 @@ jobs:
           cp LICENSE README.md README_CN.md "dist/${ASSET_BASENAME}/"
           tar -C dist -czf "dist/${ASSET_BASENAME}.tar.gz" "${ASSET_BASENAME}"
 
-      - name: Package npm platform package
-        run: |
-          node scripts/prepare-npm-packages.mjs platform \
-            --platform "${{ matrix.npm_platform }}" \
-            --version "${{ steps.package-version.outputs.version }}" \
-            --binary "target/${{ matrix.target }}/release/gitee" \
-            --out dist/npm
-          tar -C dist/npm -czf "dist/npm-${{ matrix.npm_platform }}.tar.gz" "gitee-cli-${{ matrix.npm_platform }}"
-
       - name: Upload release archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-${{ matrix.target }}
           path: dist/${{ env.ASSET_BASENAME }}.tar.gz
-          if-no-files-found: error
-
-      - name: Upload npm platform package
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-${{ matrix.npm_platform }}
-          path: dist/npm-${{ matrix.npm_platform }}.tar.gz
           if-no-files-found: error
 
   publish:
@@ -94,59 +66,19 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-
-      - name: Read package version
-        id: package-version
-        run: echo "version=$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)" >> "$GITHUB_OUTPUT"
+        uses: actions/checkout@v5
 
       - name: Download release archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: release-*
           path: release-assets
-          merge-multiple: true
-
-      - name: Download npm platform packages
-        uses: actions/download-artifact@v4
-        with:
-          pattern: npm-*
-          path: npm-package-archives
           merge-multiple: true
 
       - name: Generate checksums
         run: |
           cd release-assets
           shasum -a 256 *.tar.gz > "gitee-${GITHUB_REF_NAME}-checksums.txt"
-
-      - name: Prepare npm packages
-        run: |
-          mkdir -p npm-packages
-          for archive in npm-package-archives/*.tar.gz; do
-            tar -xzf "$archive" -C npm-packages
-          done
-          node scripts/prepare-npm-packages.mjs main \
-            --version "${{ steps.package-version.outputs.version }}" \
-            --out npm-packages
-
-      - name: Publish npm packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::error::NPM_TOKEN secret is required to publish npm packages"
-            exit 1
-          fi
-
-          npm publish ./npm-packages/gitee-cli-darwin-arm64 --access public --provenance --tag latest
-          npm publish ./npm-packages/gitee-cli-linux-x64 --access public --provenance --tag latest
-          npm publish ./npm-packages/gitee-cli --access public --provenance --tag latest
 
       - name: Create or update draft GitHub release
         uses: softprops/action-gh-release@v2

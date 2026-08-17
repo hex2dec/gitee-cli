@@ -73,12 +73,10 @@ npm 包内置以下平台的预构建二进制：
 - Apple Silicon macOS：`aarch64-apple-darwin`
 - Linux x86_64：`x86_64-unknown-linux-musl`
 
-`main` 分支上的 commit 构建会发布到 `canary` dist-tag，并额外发布对应
-commit 的可复现安装标签：
+`main` 分支上的 commit 构建会发布到 `canary` dist-tag：
 
 ```bash
 npm install -g @pkg-in/gitee-cli@canary
-npm install -g @pkg-in/gitee-cli@commit-abc1234
 ```
 
 如果你不使用 npm，也可以从 GitHub Releases 页面下载对应平台的压缩包，
