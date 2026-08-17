@@ -1,6 +1,6 @@
 [package]
 name = "gitee-api-v5"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 license = "MIT"
 description = "Gitee API v5 client"

@@ -15,7 +15,7 @@ Stop after the PR is open. Do not create a tag or publish a GitHub release unles
 
 If the version is missing, recommend one before making changes:
 
-- Read the current `[package].version` from `Cargo.toml`.
+- Read the current `[workspace.package].version` from `Cargo.toml`.
 - Inspect release-relevant changes since the latest reachable `v*` tag with `git log --oneline <tag>..HEAD` and, when useful, `git diff --stat <tag>..HEAD`.
 - Recommend only a minor or patch bump: minor for new commands, flags, or user-visible behavior; patch for fixes, documentation, tests, and internal maintenance.
 - Ask the user to confirm `v<recommended>` with a one-sentence rationale, or provide a different valid semver, before editing files.
@@ -32,7 +32,7 @@ If any prerequisite is missing or fails, stop and explain the blocker before edi
 
 ## Guardrails
 
-- Read the current version from `Cargo.toml`.
+- Read the current `[workspace.package].version` from `Cargo.toml`.
 - Accept only a valid semver target version.
 - Require the target version to differ from the current version.
 - Check whether `release/v<version>` already exists locally or remotely. If it exists, stop and ask.
@@ -44,8 +44,8 @@ If any prerequisite is missing or fails, stop and explain the blocker before edi
 
 Update only the release metadata:
 
-- `Cargo.toml`: set `[package].version` to the target version
-- `Cargo.lock`: allow the root `gitee-cli` package version to change if Cargo updates it as part of the version bump
+- `Cargo.toml`: set `[workspace.package].version` to the target version
+- `Cargo.lock`: allow the workspace packages inheriting that version, including `gitee-cli` and `gitee-api-v5`, to change if Cargo updates them as part of the version bump
 
 Do not make unrelated dependency or source changes as part of this workflow.
 
@@ -65,7 +65,7 @@ If any command fails, stop and report the failure. Do not push a branch or creat
 
 - Create branch `release/v<version>` from the chosen base branch. Default to `origin/main` when no base branch is provided.
 - Review `git diff --stat` and `git diff`.
-- Keep the diff limited to the version bump in `Cargo.toml` and, when applicable, the matching root package version change in `Cargo.lock`.
+- Keep the diff limited to the workspace version bump in `Cargo.toml` and, when applicable, the matching workspace package version changes in `Cargo.lock`.
 - Commit with this exact message: `release: v<version>`
 
 ## Pull Request

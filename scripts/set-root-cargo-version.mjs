@@ -13,21 +13,26 @@ if (!version) {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const cargoTomlPath = path.resolve(scriptDir, "..", "Cargo.toml");
 const original = fs.readFileSync(cargoTomlPath, "utf8");
-const packageStart = original.indexOf("[package]");
+const workspacePackageStart = original.indexOf("[workspace.package]");
 
-if (packageStart === -1) {
-  throw new Error("Cargo.toml does not contain a [package] section");
+if (workspacePackageStart === -1) {
+  throw new Error("Cargo.toml does not contain a [workspace.package] section");
 }
 
-const nextSectionStart = original.indexOf("\n[", packageStart + "[package]".length);
-const packageEnd = nextSectionStart === -1 ? original.length : nextSectionStart;
-const before = original.slice(0, packageStart);
-const packageSection = original.slice(packageStart, packageEnd);
-const after = original.slice(packageEnd);
-const updatedPackageSection = packageSection.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
+const nextSectionStart = original.indexOf("\n[", workspacePackageStart + "[workspace.package]".length);
+const workspacePackageEnd = nextSectionStart === -1 ? original.length : nextSectionStart;
+const before = original.slice(0, workspacePackageStart);
+const workspacePackageSection = original.slice(workspacePackageStart, workspacePackageEnd);
+const after = original.slice(workspacePackageEnd);
+const versionPattern = /^version = "[^"]+"$/m;
 
-if (updatedPackageSection === packageSection) {
-  throw new Error("Cargo.toml [package] section does not contain a version field");
+if (!versionPattern.test(workspacePackageSection)) {
+  throw new Error("Cargo.toml [workspace.package] section does not contain a version field");
 }
 
-fs.writeFileSync(cargoTomlPath, `${before}${updatedPackageSection}${after}`);
+const updatedWorkspacePackageSection = workspacePackageSection.replace(
+  versionPattern,
+  `version = "${version}"`,
+);
+
+fs.writeFileSync(cargoTomlPath, `${before}${updatedWorkspacePackageSection}${after}`);
