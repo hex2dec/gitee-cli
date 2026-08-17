@@ -1,16 +1,46 @@
-name: NPM Canary
+name: NPM Publish
 
 on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      npm_tag: ${{ steps.npm-metadata.outputs.npm_tag }}
+      version: ${{ steps.npm-metadata.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Resolve npm metadata
+        id: npm-metadata
+        run: |
+          package_version="$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)"
+          short_sha="$(git rev-parse --short=7 HEAD)"
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${package_version}"
+            npm_tag="latest"
+          else
+            version="${package_version}-commit.${short_sha}.${GITHUB_RUN_NUMBER}"
+            npm_tag="canary"
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "npm_tag=${npm_tag}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: metadata
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -25,12 +55,12 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Read Rust version
         id: rust-version
@@ -48,19 +78,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools
 
-      - name: Compute canary version
-        id: canary-version
-        run: |
-          base_version="$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)"
-          short_sha="$(git rev-parse --short=7 HEAD)"
-          version="${base_version}-commit.${short_sha}.${GITHUB_RUN_NUMBER}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
-
       - name: Apply canary version
+        if: github.ref_type == 'branch'
         run: |
-          node scripts/set-root-cargo-version.mjs "${{ steps.canary-version.outputs.version }}"
-          cargo update -p gitee-cli --precise "${{ steps.canary-version.outputs.version }}"
+          node scripts/set-root-cargo-version.mjs "${{ needs.metadata.outputs.version }}"
+          cargo update -p gitee-cli --precise "${{ needs.metadata.outputs.version }}"
 
       - name: Build release binary
         run: cargo build --locked --release --target "${{ matrix.target }}"
@@ -69,43 +91,36 @@ jobs:
         run: |
           node scripts/prepare-npm-packages.mjs platform \
             --platform "${{ matrix.npm_platform }}" \
-            --version "${{ steps.canary-version.outputs.version }}" \
+            --version "${{ needs.metadata.outputs.version }}" \
             --binary "target/${{ matrix.target }}/release/gitee" \
             --out dist/npm
           tar -C dist/npm -czf "dist/npm-${{ matrix.npm_platform }}.tar.gz" "gitee-cli-${{ matrix.npm_platform }}"
 
       - name: Upload npm platform package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: npm-${{ matrix.npm_platform }}
           path: dist/npm-${{ matrix.npm_platform }}.tar.gz
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs:
+      - metadata
+      - build
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - name: Set up Node for trusted publishing
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Compute canary version
-        id: canary-version
-        run: |
-          base_version="$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)"
-          short_sha="$(git rev-parse --short=7 HEAD)"
-          version="${base_version}-commit.${short_sha}.${GITHUB_RUN_NUMBER}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
-
       - name: Download npm platform packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: npm-*
           path: npm-package-archives
@@ -118,24 +133,13 @@ jobs:
             tar -xzf "$archive" -C npm-packages
           done
           node scripts/prepare-npm-packages.mjs main \
-            --version "${{ steps.canary-version.outputs.version }}" \
+            --version "${{ needs.metadata.outputs.version }}" \
             --out npm-packages
 
       - name: Publish npm packages
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          CANARY_VERSION: ${{ steps.canary-version.outputs.version }}
-          COMMIT_TAG: commit-${{ steps.canary-version.outputs.short_sha }}
+          NPM_TAG: ${{ needs.metadata.outputs.npm_tag }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::error::NPM_TOKEN secret is required to publish npm packages"
-            exit 1
-          fi
-
-          npm publish ./npm-packages/gitee-cli-darwin-arm64 --access public --provenance --tag canary
-          npm publish ./npm-packages/gitee-cli-linux-x64 --access public --provenance --tag canary
-          npm publish ./npm-packages/gitee-cli --access public --provenance --tag canary
-
-          npm dist-tag add "@pkg-in/gitee-cli-darwin-arm64@${CANARY_VERSION}" "${COMMIT_TAG}"
-          npm dist-tag add "@pkg-in/gitee-cli-linux-x64@${CANARY_VERSION}" "${COMMIT_TAG}"
-          npm dist-tag add "@pkg-in/gitee-cli@${CANARY_VERSION}" "${COMMIT_TAG}"
+          npm publish ./npm-packages/gitee-cli-darwin-arm64 --access public --provenance --tag "${NPM_TAG}"
+          npm publish ./npm-packages/gitee-cli-linux-x64 --access public --provenance --tag "${NPM_TAG}"
+          npm publish ./npm-packages/gitee-cli --access public --provenance --tag "${NPM_TAG}"
