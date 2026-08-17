@@ -150,6 +150,12 @@ Include comment history when you need prior discussion:
 gitee issue view I123 --repo octo/demo --comments --page 1 --per-page 20 --json
 ```
 
+Edit an issue title, body, or state:
+
+```bash
+gitee issue edit I123 --repo octo/demo --title "Updated title" --state closed --json
+```
+
 Post a follow-up comment non-interactively:
 
 ```bash
@@ -232,6 +238,7 @@ Commands that can use local repository context include:
 - `repo view`
 - `issue list`
 - `issue view`
+- `issue edit`
 - `issue comment`
 - `pr view`
 - `pr list`
@@ -265,6 +272,7 @@ may still require authentication.
 Commands that require authentication:
 
 - `auth login`
+- `issue edit`
 - `issue comment`
 - `pr comment`
 - `pr review`

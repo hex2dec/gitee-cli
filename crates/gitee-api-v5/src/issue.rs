@@ -17,6 +17,13 @@ pub struct CreateIssue<'a> {
     pub body: Option<&'a str>,
 }
 
+pub struct UpdateIssue<'a> {
+    pub repo: &'a str,
+    pub title: Option<&'a str>,
+    pub body: Option<&'a str>,
+    pub state: Option<&'a str>,
+}
+
 pub struct IssueListOptions<'a> {
     pub state: &'a str,
     pub search: Option<&'a str>,
@@ -242,6 +249,62 @@ impl GiteeClient {
         let response = self
             .client
             .post(format!("{}/v5/repos/{owner}/issues", self.base_url))
+            .form(&form)
+            .send()
+            .map_err(IssueError::Transport)?;
+
+        if response.status().is_success() {
+            return response
+                .json::<IssueResponse>()
+                .map_err(IssueError::Transport);
+        }
+
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if status == 401 {
+            return Err(IssueError::InvalidToken);
+        }
+
+        if status == 404 {
+            return Err(IssueError::NotFound);
+        }
+
+        if let Some(message) = error_message {
+            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
+        }
+
+        Err(IssueError::UnexpectedStatus(status))
+    }
+
+    pub fn update_issue(
+        &self,
+        owner: &str,
+        number: &str,
+        token: &str,
+        request: &UpdateIssue<'_>,
+    ) -> Result<IssueResponse, IssueError> {
+        let mut form = vec![("repo", request.repo.to_string())];
+
+        if let Some(title) = request.title {
+            form.push(("title", title.to_string()));
+        }
+
+        if let Some(body) = request.body {
+            form.push(("body", body.to_string()));
+        }
+
+        if let Some(state) = request.state {
+            form.push(("state", state.to_string()));
+        }
+
+        let response = self
+            .client
+            .patch(format!(
+                "{}/v5/repos/{owner}/issues/{number}",
+                self.base_url
+            ))
+            .query(&[("access_token", token)])
             .form(&form)
             .send()
             .map_err(IssueError::Transport)?;

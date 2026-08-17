@@ -56,7 +56,7 @@ Use `gitee help --json` when an agent needs a machine-readable manifest of:
 | --- | --- | --- |
 | `gitee auth` | `gh auth` | Authentication prerequisite checks |
 | `gitee repo` | `gh repo` | Repository inspection and clone |
-| `gitee issue` | `gh issue` | Issue list, view, create, comment |
+| `gitee issue` | `gh issue` | Issue list, view, create, edit, comment |
 | `gitee pr` | `gh pr` | Pull request list, view, create, edit, merge, review, comment, status, checkout |
 
 ## Reference map
@@ -65,7 +65,7 @@ Load only one of these unless the task spans multiple areas:
 
 - [`auth.md`](auth.md): `gitee auth status` only. Use for auth prerequisite checks.
 - [`repo.md`](repo.md): `gitee repo view` and `gitee repo clone`.
-- [`issue.md`](issue.md): `gitee issue list`, `view`, `create`, `comment`.
+- [`issue.md`](issue.md): `gitee issue list`, `view`, `create`, `edit`, `comment`.
 - [`pr.md`](pr.md): `gitee pr list`, `view`, `create`, `edit`, `merge`, `review`, `comment`, `status`, `checkout`.
 
 Recommended lookup path:

@@ -91,6 +91,41 @@ gitee issue create --repo octo/demo --title "New bug" --body "Steps to reproduce
 gitee issue create --title "New bug" --body-file ./issue.md --json
 ```
 
+## `gitee issue edit`
+
+- `gh` equivalent: `gh issue edit`
+- Summary: edit one issue's title, body, or state.
+- Auth: `required`
+- Local git required: no
+- Repo inference: yes
+- Syntax:
+
+```bash
+gitee issue edit <ISSUE> [--repo <OWNER/REPO>] [--title <TITLE>] [--body <TEXT> | --body-file <PATH>] [--state <STATE>] [--json [<FIELDS>]]
+```
+
+- Arguments:
+  - `<ISSUE>`: one issue number or identifier such as `I123`
+- Flags:
+  - `--repo <OWNER/REPO>`: target repository
+  - `--title <TITLE>`: replace the issue title
+  - `--body <TEXT>`: replace the issue body; an empty string clears it
+  - `--body-file <PATH>`: read the replacement body from a file; use `-` for stdin
+  - `--state <STATE>`: `open` or `closed`
+  - `--json [<FIELDS>]`: output full issue JSON or select supported detail fields
+- Notes:
+  - Provide at least one of `--title`, `--body`, `--body-file`, or `--state`.
+  - Provide at most one of `--body` or `--body-file`.
+  - Only one issue can be edited per command.
+  - When `--repo` is omitted, the command can infer the repository from local git context.
+- Examples:
+
+```bash
+gitee issue edit I123 --repo octo/demo --title "Updated title" --json
+gitee issue edit I123 --body-file ./issue.md --state closed --json
+gitee issue edit I123 --json number,title,url --state open
+```
+
 ## `gitee issue comment`
 
 - `gh` equivalent: `gh issue comment`

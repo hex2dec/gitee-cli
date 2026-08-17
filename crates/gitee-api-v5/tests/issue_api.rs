@@ -1,8 +1,8 @@
 mod common;
 
 use common::client_for;
-use gitee_api_v5::{CreateIssue, IssueError, IssueListOptions};
-use httpmock::Method::{GET, POST};
+use gitee_api_v5::{CreateIssue, IssueError, IssueListOptions, UpdateIssue};
+use httpmock::Method::{GET, PATCH, POST};
 use httpmock::MockServer;
 
 #[test]
@@ -126,4 +126,51 @@ fn create_issue_preserves_api_error_message() {
         _ => panic!("expected 422 API message"),
     }
     create_mock.assert_hits(1);
+}
+
+#[test]
+fn update_issue_sends_patch_fields_and_parses_response() {
+    let server = MockServer::start();
+    let update_mock = server.mock(|when, then| {
+        when.method(PATCH)
+            .path("/v5/repos/octo/issues/I125")
+            .query_param("access_token", "secret-token")
+            .body_contains("repo=demo")
+            .body_contains("title=Updated+issue")
+            .body_contains("body=Updated+body")
+            .body_contains("state=closed");
+        then.status(200).json_body(serde_json::json!({
+            "number": "I125",
+            "title": "Updated issue",
+            "state": "closed",
+            "body": "Updated body",
+            "comments": 1,
+            "html_url": "https://gitee.com/octo/demo/issues/I125",
+            "created_at": "2026-03-20T14:00:00Z",
+            "updated_at": "2026-03-20T15:00:00Z",
+            "user": {
+                "login": "alice"
+            }
+        }));
+    });
+
+    let issue = client_for(&server)
+        .update_issue(
+            "octo",
+            "I125",
+            "secret-token",
+            &UpdateIssue {
+                repo: "demo",
+                title: Some("Updated issue"),
+                body: Some("Updated body"),
+                state: Some("closed"),
+            },
+        )
+        .expect("updated issue should parse");
+
+    assert_eq!(issue.number, "I125");
+    assert_eq!(issue.title, "Updated issue");
+    assert_eq!(issue.state, "closed");
+    assert_eq!(issue.body.as_deref(), Some("Updated body"));
+    update_mock.assert_hits(1);
 }

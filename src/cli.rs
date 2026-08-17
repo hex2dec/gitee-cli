@@ -6,8 +6,8 @@ use gitee_api_v5::PullRequestListFilters;
 use crate::auth::{AuthService, LoginRequest, LoginTokenSource};
 use crate::command::{CommandError, CommandOutcome, EXIT_OK, OutputFormat};
 use crate::issue::{
-    IssueBodySource, IssueCommentRequest, IssueCreateRequest, IssueListRequest, IssueService,
-    IssueStateFilter, IssueViewRequest,
+    IssueBodySource, IssueCommentRequest, IssueCreateRequest, IssueEditRequest, IssueListRequest,
+    IssueService, IssueStateFilter, IssueViewRequest,
 };
 use crate::pr::{
     PrCheckoutRequest, PrCommentRequest, PrCreateRequest, PrEditRequest, PrListRequest,
@@ -86,7 +86,7 @@ fn json_field_selection_for_help(path: &str) -> Option<&'static [&'static str]> 
         "pr view" | "pr create" | "pr edit" => Some(PR_DETAIL_JSON_FIELDS),
         "pr list" | "pr status" => Some(PR_SUMMARY_JSON_FIELDS),
         "repo view" => Some(REPO_VIEW_JSON_FIELDS),
-        "issue view" => Some(ISSUE_DETAIL_JSON_FIELDS),
+        "issue view" | "issue edit" => Some(ISSUE_DETAIL_JSON_FIELDS),
         "issue list" => Some(ISSUE_SUMMARY_JSON_FIELDS),
         _ => None,
     }
@@ -156,6 +156,7 @@ fn run_issue(args: &[String]) -> Result<CommandOutcome, CommandError> {
         "comment" => execute_parsed(parse_issue_comment_args(rest), |request| {
             issue.comment(request)
         }),
+        "edit" => execute_parsed(parse_issue_edit_args(rest), |request| issue.edit(request)),
         "list" => execute_parsed(parse_issue_list_args(rest), |request| issue.list(request)),
         "view" => execute_parsed(parse_issue_view_args(rest), |request| issue.view(request)),
         _ => Err(CommandError::usage("unsupported command")),
@@ -260,6 +261,10 @@ fn resolve_help_topic(path: &[String]) -> Option<HelpTopic> {
         ["issue", "create"] => Some(HelpTopic {
             text_command: issue_create_command,
             json: issue_create_help_json,
+        }),
+        ["issue", "edit"] => Some(HelpTopic {
+            text_command: issue_edit_command,
+            json: issue_edit_help_json,
         }),
         ["issue", "list"] => Some(HelpTopic {
             text_command: issue_list_command,
@@ -530,6 +535,62 @@ fn parse_issue_create_args(
             repo,
             title,
             body,
+        })
+    })
+}
+
+fn parse_issue_edit_args(args: &[String]) -> Result<ParseOutcome<IssueEditRequest>, CommandError> {
+    map_parsed(parse_matches(issue_edit_command(), args), |matches| {
+        let output = output_format(&matches);
+        validate_json_field_selection(&output, "issue edit", ISSUE_DETAIL_JSON_FIELDS)?;
+        let repo = last_value(&matches, "repo");
+        let title = last_value(&matches, "title");
+        let state = match last_value(&matches, "state") {
+            Some(value) => Some(parse_issue_edit_state(&value)?),
+            None => None,
+        };
+        let body_values = values(&matches, "body");
+        let body_file_values = values(&matches, "body_file");
+        let positionals = values(&matches, "positionals");
+
+        let Some(number) = positionals.first() else {
+            return Err(CommandError::usage("issue edit requires an issue number"));
+        };
+
+        if positionals.len() > 1 {
+            return Err(CommandError::usage(
+                "issue edit accepts exactly one issue number",
+            ));
+        }
+
+        if body_values.len() + body_file_values.len() > 1 {
+            return Err(CommandError::usage(
+                "provide only one of --body or --body-file",
+            ));
+        }
+
+        let body = body_values
+            .last()
+            .map(|value| IssueBodySource::Inline(value.clone()))
+            .or_else(|| {
+                body_file_values
+                    .last()
+                    .map(|value| IssueBodySource::File(PathBuf::from(value)))
+            });
+
+        if title.is_none() && body.is_none() && state.is_none() {
+            return Err(CommandError::usage(
+                "issue edit requires at least one of --title, --body, --body-file, or --state",
+            ));
+        }
+
+        Ok(IssueEditRequest {
+            output,
+            repo,
+            number: number.clone(),
+            title,
+            body,
+            state,
         })
     })
 }
@@ -1182,9 +1243,10 @@ fn auth_help_command() -> Command {
 
 fn issue_help_command() -> Command {
     base_command("issue", "gitee issue")
-        .about("Read, create, and comment on issues")
+        .about("Read, create, edit, and comment on issues")
         .subcommand(issue_create_command())
         .subcommand(issue_comment_command())
+        .subcommand(issue_edit_command())
         .subcommand(issue_list_command())
         .subcommand(issue_view_command())
 }
@@ -1338,6 +1400,42 @@ fn issue_create_command() -> Command {
             "body-file",
             "PATH",
             "Read issue body text from a file",
+        ))
+}
+
+fn issue_edit_command() -> Command {
+    base_command("edit", "gitee issue edit")
+        .about("Edit an existing issue")
+        .arg(json_flag())
+        .arg(repo_option())
+        .arg(string_option(
+            "title",
+            "title",
+            "TITLE",
+            "Replace the issue title",
+        ))
+        .arg(string_option(
+            "body",
+            "body",
+            "BODY",
+            "Replace the issue body text",
+        ))
+        .arg(string_option(
+            "body_file",
+            "body-file",
+            "PATH",
+            "Read the issue body text from a file",
+        ))
+        .arg(string_option(
+            "state",
+            "state",
+            "STATE",
+            "Change issue state: open or closed",
+        ))
+        .arg(positionals_arg(
+            "positionals",
+            "ISSUE",
+            "Issue number or identifier, such as I123",
         ))
 }
 
@@ -1806,11 +1904,12 @@ fn issue_help_json() -> serde_json::Value {
     help_group_json(
         "issue",
         "issue",
-        "Read, create, and comment on issues",
+        "Read, create, edit, and comment on issues",
         "gh issue",
         vec![
             issue_create_help_json(),
             issue_comment_help_json(),
+            issue_edit_help_json(),
             issue_list_help_json(),
             issue_view_help_json(),
         ],
@@ -1988,6 +2087,55 @@ fn issue_create_help_json() -> serde_json::Value {
         ],
         vec![
             "--title is required.",
+            "Provide at most one of --body or --body-file.",
+            "When --repo is omitted, the command can infer the repository from local git context.",
+        ],
+    )
+}
+
+fn issue_edit_help_json() -> serde_json::Value {
+    help_command_json(
+        "edit",
+        "issue edit",
+        "Edit an existing issue",
+        "gh issue edit",
+        true,
+        "required",
+        true,
+        true,
+        false,
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            repo_option_json(),
+            help_option_json("--title", Some("TITLE"), "Replace the issue title", false),
+            help_option_json("--body", Some("BODY"), "Replace the issue body text", false),
+            help_option_json(
+                "--body-file",
+                Some("PATH"),
+                "Read the issue body text from a file",
+                false,
+            ),
+            help_option_json(
+                "--state",
+                Some("STATE"),
+                "Change issue state: open or closed",
+                false,
+            ),
+        ],
+        vec![help_argument_json(
+            "issue",
+            "ISSUE",
+            "Issue number or identifier, such as I123",
+            true,
+        )],
+        vec!["--body", "--body-file"],
+        vec![
+            "gitee issue edit I123 --repo octo/demo --title \"Updated title\" --json",
+            "gitee issue edit I123 --body-file ./body.md --state closed --json",
+            "gitee issue edit I123 --repo octo/demo --state open --json number,title,url",
+        ],
+        vec![
+            "Provide at least one of --title, --body, --body-file, or --state.",
             "Provide at most one of --body or --body-file.",
             "When --repo is omitted, the command can infer the repository from local git context.",
         ],
@@ -2571,6 +2719,14 @@ fn parse_pr_state(value: &str) -> Result<String, CommandError> {
 }
 
 fn parse_pr_edit_state(value: &str) -> Result<String, CommandError> {
+    parse_open_closed_state(value)
+}
+
+fn parse_issue_edit_state(value: &str) -> Result<String, CommandError> {
+    parse_open_closed_state(value)
+}
+
+fn parse_open_closed_state(value: &str) -> Result<String, CommandError> {
     match value {
         "open" | "closed" => Ok(value.to_string()),
         _ => Err(CommandError::usage(
