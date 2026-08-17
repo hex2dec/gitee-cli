@@ -42,7 +42,7 @@ fn help_json_exposes_the_top_level_command_groups() {
         .map(|command| command["name"].as_str().unwrap())
         .collect::<Vec<_>>();
 
-    assert_eq!(names, vec!["auth", "issue", "pr", "repo"]);
+    assert_eq!(names, vec!["auth", "issue", "pr", "repo", "skills"]);
 
     let pr_group = commands
         .iter()

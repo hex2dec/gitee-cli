@@ -79,13 +79,14 @@ For contributor setup, validation commands, and repository conventions, see
 
 ## Install the Bundled Skill in Coding Agents
 
-In Codex, Claude Code, and similar coding agents, point the agent to the bundled [`using-gitee-cli` skill](https://raw.githubusercontent.com/hex2dec/gitee-cli/main/skills/using-gitee-cli/SKILL.md) and ask it to install the skill; the agent can complete the installation automatically.
+Install the bundled `using-gitee-cli` skill into `~/.agents/skills`:
 
-Example prompt:
-
-```text
-Please install this skill: [using-gitee-cli](https://raw.githubusercontent.com/hex2dec/gitee-cli/main/skills/using-gitee-cli/SKILL.md).
+```bash
+gitee skills install
 ```
+
+Use `gitee skills list` to check whether the skill is installed, and
+`gitee skills uninstall` to remove it. All three commands support `--json`.
 
 ## Common Workflows
 
