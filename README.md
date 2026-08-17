@@ -55,13 +55,34 @@ Use `gitee-cli` if you want:
 
 ## Install
 
-Tagged GitHub releases publish prebuilt binaries for:
+Install the latest stable release with npm:
+
+```bash
+npm install -g @pkg-in/gitee-cli
+gitee --version
+```
+
+Run the CLI without a global install:
+
+```bash
+npx @pkg-in/gitee-cli --version
+```
+
+The npm package includes prebuilt binaries for:
 
 - Apple Silicon macOS: `aarch64-apple-darwin`
 - Linux x86_64: `x86_64-unknown-linux-musl`
 
-Download the matching archive from the GitHub Releases page, extract it, and
-place `gitee` somewhere on your `PATH`.
+Commit builds from the `main` branch are published under the `canary` dist-tag,
+with commit-specific tags for repeatable installs:
+
+```bash
+npm install -g @pkg-in/gitee-cli@canary
+npm install -g @pkg-in/gitee-cli@commit-abc1234
+```
+
+If you do not use npm, download the matching archive from the GitHub Releases
+page, extract it, and place `gitee` somewhere on your `PATH`.
 
 Each release also includes `gitee-<version>-checksums.txt`.
 

@@ -1,0 +1,25 @@
+{
+  "name": "@pkg-in/gitee-cli-darwin-arm64",
+  "version": "0.0.0",
+  "description": "macOS arm64 binary for @pkg-in/gitee-cli",
+  "license": "MIT",
+  "homepage": "https://github.com/hex2dec/gitee-cli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hex2dec/gitee-cli.git"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin/gitee",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
