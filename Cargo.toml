@@ -1,6 +1,6 @@
 [package]
 name = "gitee-cli"
-version = "0.4.0"
+version.workspace = true
 edition = "2024"
 license = "MIT"
 description = "Agent-first CLI for gitee.com workflows"
@@ -13,6 +13,9 @@ categories = ["command-line-utilities"]
 
 [workspace]
 members = ["crates/gitee-api-v5"]
+
+[workspace.package]
+version = "0.4.0"
 
 [[bin]]
 name = "gitee"
