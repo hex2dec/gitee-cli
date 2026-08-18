@@ -58,14 +58,14 @@ gitee help --json
 使用 npm 安装最新稳定版：
 
 ```bash
-npm install -g @pkg-in/gitee-cli
+npm install -g @pkg-ai/gitee-cli
 gitee --version
 ```
 
 如果不希望全局安装，可以直接通过 npx 运行：
 
 ```bash
-npx @pkg-in/gitee-cli --version
+npx @pkg-ai/gitee-cli --version
 ```
 
 npm 包内置以下平台的预构建二进制：
@@ -76,7 +76,7 @@ npm 包内置以下平台的预构建二进制：
 `main` 分支上的 commit 构建会发布到 `canary` dist-tag：
 
 ```bash
-npm install -g @pkg-in/gitee-cli@canary
+npm install -g @pkg-ai/gitee-cli@canary
 ```
 
 如果你不使用 npm，也可以从 GitHub Releases 页面下载对应平台的压缩包，

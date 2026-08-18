@@ -1,7 +1,7 @@
 {
-  "name": "@pkg-in/gitee-cli-darwin-arm64",
+  "name": "@pkg-ai/gitee-cli-darwin-arm64",
   "version": "0.0.0",
-  "description": "macOS arm64 binary for @pkg-in/gitee-cli",
+  "description": "macOS arm64 binary for @pkg-ai/gitee-cli",
   "license": "MIT",
   "homepage": "https://github.com/pkg-ai/gitee-cli",
   "repository": {

@@ -5,11 +5,11 @@ const { spawnSync } = require("node:child_process");
 
 const SUPPORTED_PLATFORMS = {
   "darwin-arm64": {
-    packageName: "@pkg-in/gitee-cli-darwin-arm64",
+    packageName: "@pkg-ai/gitee-cli-darwin-arm64",
     binaryPath: "bin/gitee"
   },
   "linux-x64": {
-    packageName: "@pkg-in/gitee-cli-linux-x64",
+    packageName: "@pkg-ai/gitee-cli-linux-x64",
     binaryPath: "bin/gitee"
   }
 };
@@ -28,7 +28,7 @@ function resolveBinary() {
 
   if (!selected) {
     throw new Error(
-      `Unsupported platform for @pkg-in/gitee-cli: ${platform}. ` +
+      `Unsupported platform for @pkg-ai/gitee-cli: ${platform}. ` +
         `Supported platforms: ${supportedPlatformList()}. ` +
         "Install a GitHub Release archive or build from source with cargo build --release."
     );
@@ -40,7 +40,7 @@ function resolveBinary() {
     if (error && error.code === "MODULE_NOT_FOUND") {
       throw new Error(
         `Could not find ${selected.packageName}. ` +
-          "Reinstall @pkg-in/gitee-cli so npm can install its optional platform dependency."
+          "Reinstall @pkg-ai/gitee-cli so npm can install its optional platform dependency."
       );
     }
 

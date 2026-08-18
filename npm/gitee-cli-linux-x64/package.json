@@ -1,7 +1,7 @@
 {
-  "name": "@pkg-in/gitee-cli-linux-x64",
+  "name": "@pkg-ai/gitee-cli-linux-x64",
   "version": "0.0.0",
-  "description": "Linux x64 musl binary for @pkg-in/gitee-cli",
+  "description": "Linux x64 musl binary for @pkg-ai/gitee-cli",
   "license": "MIT",
   "homepage": "https://github.com/pkg-ai/gitee-cli",
   "repository": {

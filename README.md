@@ -58,14 +58,14 @@ Use `gitee-cli` if you want:
 Install the latest stable release with npm:
 
 ```bash
-npm install -g @pkg-in/gitee-cli
+npm install -g @pkg-ai/gitee-cli
 gitee --version
 ```
 
 Run the CLI without a global install:
 
 ```bash
-npx @pkg-in/gitee-cli --version
+npx @pkg-ai/gitee-cli --version
 ```
 
 The npm package includes prebuilt binaries for:
@@ -76,7 +76,7 @@ The npm package includes prebuilt binaries for:
 Commit builds from the `main` branch are published under the `canary` dist-tag:
 
 ```bash
-npm install -g @pkg-in/gitee-cli@canary
+npm install -g @pkg-ai/gitee-cli@canary
 ```
 
 If you do not use npm, download the matching archive from the GitHub Releases
