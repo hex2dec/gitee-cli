@@ -1,12 +1,12 @@
 {
-  "name": "@pkg-in/gitee-cli",
+  "name": "@pkg-ai/gitee-cli",
   "version": "0.0.0",
   "description": "Agent-first CLI for gitee.com workflows",
   "license": "MIT",
-  "homepage": "https://github.com/hex2dec/gitee-cli",
+  "homepage": "https://github.com/pkg-ai/gitee-cli",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hex2dec/gitee-cli.git"
+    "url": "git+https://github.com/pkg-ai/gitee-cli.git"
   },
   "bin": {
     "gitee": "bin/gitee.js"
@@ -23,8 +23,8 @@
     "test": "node --test test/*.test.js"
   },
   "optionalDependencies": {
-    "@pkg-in/gitee-cli-darwin-arm64": "0.0.0",
-    "@pkg-in/gitee-cli-linux-x64": "0.0.0"
+    "@pkg-ai/gitee-cli-darwin-arm64": "0.0.0",
+    "@pkg-ai/gitee-cli-linux-x64": "0.0.0"
   },
   "publishConfig": {
     "access": "public"

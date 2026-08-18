@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 const platforms = {
   "darwin-arm64": {
     directory: "gitee-cli-darwin-arm64",
-    packageName: "@pkg-in/gitee-cli-darwin-arm64"
+    packageName: "@pkg-ai/gitee-cli-darwin-arm64"
   },
   "linux-x64": {
     directory: "gitee-cli-linux-x64",
-    packageName: "@pkg-in/gitee-cli-linux-x64"
+    packageName: "@pkg-ai/gitee-cli-linux-x64"
   }
 };
 

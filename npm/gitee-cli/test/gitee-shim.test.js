@@ -34,7 +34,7 @@ function installFakePlatformPackage(appRoot, packageSuffix = "linux-x64") {
   const packageRoot = path.join(
     appRoot,
     "node_modules",
-    "@pkg-in",
+    "@pkg-ai",
     `gitee-cli-${packageSuffix}`
   );
   const binaryPath = path.join(packageRoot, "bin", "gitee");
