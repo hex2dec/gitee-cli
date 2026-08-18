@@ -132,10 +132,6 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
     assert_eq!(login_body["authenticated"], true);
     assert_eq!(login_body["source"], "config");
     assert_eq!(login_body["username"], "home-user");
-    assert_eq!(
-        login_body["config_path"],
-        expected_config_path.display().to_string()
-    );
 
     let status_output = Command::cargo_bin("gitee")
         .unwrap()
@@ -154,10 +150,6 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
     assert_eq!(status_body["authenticated"], true);
     assert_eq!(status_body["source"], "config");
     assert_eq!(status_body["username"], "home-user");
-    assert_eq!(
-        status_body["config_path"],
-        expected_config_path.display().to_string()
-    );
     assert!(expected_config_path.exists());
     user_mock.assert_hits(2);
 }

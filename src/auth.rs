@@ -104,7 +104,6 @@ impl AuthService {
                     "source": state.source,
                     "username": state.username,
                     "logged_out": state.logged_out,
-                    "config_path": self.config.config_path(),
                 }),
             ),
             OutputFormat::Text => CommandOutcome::text(code, render_auth_text(&state)),
