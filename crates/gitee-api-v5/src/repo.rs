@@ -1,5 +1,5 @@
 use crate::client::GiteeClient;
-use crate::utils::{parse_api_error_message, response_indicates_invalid_token};
+use crate::utils::ApiResponseError;
 use serde::Deserialize;
 
 #[derive(Debug)]
@@ -8,6 +8,20 @@ pub enum RepoError {
     NotFound,
     Transport(reqwest::Error),
     UnexpectedStatus(u16),
+}
+
+impl ApiResponseError for RepoError {
+    fn invalid_token() -> Self {
+        Self::InvalidToken
+    }
+
+    fn not_found() -> Self {
+        Self::NotFound
+    }
+
+    fn unexpected_status(status: u16) -> Self {
+        Self::UnexpectedStatus(status)
+    }
 }
 
 #[derive(Deserialize)]
@@ -55,19 +69,7 @@ impl GiteeClient {
             return Ok(repository);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(RepoError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(RepoError::InvalidToken);
-        }
-
-        Err(RepoError::UnexpectedStatus(status))
+        Err(RepoError::from_response_with_not_found_first(response))
     }
 
     pub fn find_repository_by_human_name(
@@ -93,13 +95,6 @@ impl GiteeClient {
             return Ok(repository);
         }
 
-        let status = response.status().as_u16();
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(RepoError::InvalidToken);
-        }
-
-        Err(RepoError::UnexpectedStatus(status))
+        Err(RepoError::from_response_without_not_found(response))
     }
 }

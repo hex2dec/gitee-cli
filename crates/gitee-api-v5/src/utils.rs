@@ -1,5 +1,49 @@
 use serde::Deserialize;
 
+enum InvalidTokenCheck {
+    BeforeNotFound,
+    AfterNotFound,
+}
+
+enum NotFoundBehavior {
+    MapToNotFound,
+    KeepUnexpectedStatus,
+}
+
+pub(crate) trait ApiResponseError: Sized {
+    fn invalid_token() -> Self;
+    fn not_found() -> Self;
+    fn unexpected_status(status: u16) -> Self;
+
+    fn unexpected_status_with_message(status: u16, _message: String) -> Self {
+        Self::unexpected_status(status)
+    }
+
+    fn from_response_with_not_found_first(response: reqwest::blocking::Response) -> Self {
+        map_api_error_response(
+            response,
+            NotFoundBehavior::MapToNotFound,
+            InvalidTokenCheck::AfterNotFound,
+        )
+    }
+
+    fn from_response_with_token_first(response: reqwest::blocking::Response) -> Self {
+        map_api_error_response(
+            response,
+            NotFoundBehavior::MapToNotFound,
+            InvalidTokenCheck::BeforeNotFound,
+        )
+    }
+
+    fn from_response_without_not_found(response: reqwest::blocking::Response) -> Self {
+        map_api_error_response(
+            response,
+            NotFoundBehavior::KeepUnexpectedStatus,
+            InvalidTokenCheck::BeforeNotFound,
+        )
+    }
+}
+
 #[derive(Deserialize)]
 struct ApiErrorResponse {
     #[serde(default)]
@@ -24,6 +68,37 @@ pub(crate) fn parse_api_error_message(response: reqwest::blocking::Response) -> 
     }
 
     Some(body)
+}
+
+fn map_api_error_response<E: ApiResponseError>(
+    response: reqwest::blocking::Response,
+    not_found_behavior: NotFoundBehavior,
+    invalid_token_check: InvalidTokenCheck,
+) -> E {
+    let status = response.status().as_u16();
+
+    if matches!(invalid_token_check, InvalidTokenCheck::AfterNotFound)
+        && status == 404
+        && matches!(not_found_behavior, NotFoundBehavior::MapToNotFound)
+    {
+        return E::not_found();
+    }
+
+    let error_message = parse_api_error_message(response);
+
+    if response_indicates_invalid_token(status, error_message.as_deref()) {
+        return E::invalid_token();
+    }
+
+    if status == 404 && matches!(not_found_behavior, NotFoundBehavior::MapToNotFound) {
+        return E::not_found();
+    }
+
+    if let Some(message) = error_message {
+        return E::unexpected_status_with_message(status, message);
+    }
+
+    E::unexpected_status(status)
 }
 
 pub(crate) fn response_indicates_invalid_token(status: u16, error_message: Option<&str>) -> bool {
