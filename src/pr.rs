@@ -12,7 +12,7 @@ use serde_json::json;
 
 use crate::command::{CommandError, CommandOutcome, EXIT_OK, EXIT_REMOTE, OutputFormat};
 use crate::config::ConfigStore;
-use crate::repo_context::infer_repo_context;
+use crate::repo_context::{infer_repo_context, infer_repo_context_with_pushed_branch};
 
 pub struct PrService {
     config: ConfigStore,
@@ -1371,7 +1371,7 @@ fn resolve_create_head(
         return Ok(head.to_string());
     }
 
-    let context = infer_repo_context()
+    let context = infer_repo_context_with_pushed_branch()
         .map_err(|err| CommandError::git(format!("git context error: {err}")))?;
 
     if repo_is_explicit && (context.owner != repo.owner || context.name != repo.name) {
@@ -1380,83 +1380,7 @@ fn resolve_create_head(
         ));
     }
 
-    ensure_current_branch_is_pushed_to_origin(&context.current_branch)?;
     Ok(context.current_branch)
-}
-
-fn ensure_current_branch_is_pushed_to_origin(branch: &str) -> Result<(), CommandError> {
-    let Some(remote) = git_config(&format!("branch.{branch}.remote"))? else {
-        return Err(CommandError::git(
-            "git context error: current branch is not pushed to origin",
-        ));
-    };
-
-    if remote != "origin" {
-        return Err(CommandError::git(format!(
-            "git context error: current branch tracks remote `{remote}`, expected origin",
-        )));
-    }
-
-    let expected_merge = format!("refs/heads/{branch}");
-    let Some(merge_ref) = git_config(&format!("branch.{branch}.merge"))? else {
-        return Err(CommandError::git(
-            "git context error: current branch is not pushed to origin",
-        ));
-    };
-
-    if merge_ref != expected_merge {
-        return Err(CommandError::git(format!(
-            "git context error: current branch tracks `{merge_ref}`, expected {expected_merge}",
-        )));
-    }
-
-    if !git_ref_exists(&format!("refs/remotes/origin/{branch}"))? {
-        return Err(CommandError::git(
-            "git context error: current branch is not pushed to origin",
-        ));
-    }
-
-    Ok(())
-}
-
-fn git_config(key: &str) -> Result<Option<String>, CommandError> {
-    let output = ProcessCommand::new("git")
-        .args(["config", "--get", key])
-        .output()
-        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
-
-    if output.status.success() {
-        return Ok(Some(
-            String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        ));
-    }
-
-    if output.status.code() == Some(1) {
-        return Ok(None);
-    }
-
-    Err(CommandError::git(format!(
-        "git context error: failed to read git config `{key}`"
-    )))
-}
-
-fn git_ref_exists(reference: &str) -> Result<bool, CommandError> {
-    let output = ProcessCommand::new("git")
-        .args(["show-ref", "--verify", "--quiet", reference])
-        .output()
-        .map_err(|err| CommandError::git(format!("git context error: failed to run git: {err}")))?;
-
-    if output.status.success() {
-        return Ok(true);
-    }
-
-    if output.status.code() == Some(1) {
-        return Ok(false);
-    }
-
-    Err(CommandError::git(format!(
-        "git context error: failed to inspect git reference `{reference}`"
-    )))
 }
 
 fn read_optional_body(body: Option<PrTextSource>) -> Result<Option<String>, CommandError> {
