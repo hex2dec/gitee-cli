@@ -84,17 +84,6 @@ npm install -g @pkg-ai/gitee-cli@canary
 
 每个 release 还会额外提供 `gitee-<version>-checksums.txt`。
 
-## 从源码构建
-
-如果你需要本地构建版本，或者目标平台不在当前发布资产范围内，可以从源码构建：
-
-```bash
-cargo build --release
-```
-
-贡献者环境准备、验证命令和仓库约定请见
-[CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md)。
-
 ## 在 Coding Agent 中安装内置 Skill
 
 将内置的 `using-gitee-cli` skill 安装到 `~/.agents/skills`：
@@ -345,7 +334,7 @@ gitee pr checkout 42 --repo octo/demo --json
 ## 参与贡献
 
 本地开发、测试和 Pull Request 约定请见
-[CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md)。
+[CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ## 许可证
 

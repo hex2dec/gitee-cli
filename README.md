@@ -84,18 +84,6 @@ page, extract it, and place `gitee` somewhere on your `PATH`.
 
 Each release also includes `gitee-<version>-checksums.txt`.
 
-## Build From Source
-
-If you need a local build or a platform outside the published release assets,
-build from source:
-
-```bash
-cargo build --release
-```
-
-For contributor setup, validation commands, and repository conventions, see
-[CONTRIBUTING.md](./CONTRIBUTING.md).
-
 ## Install the Bundled Skill in Coding Agents
 
 Install the bundled `using-gitee-cli` skill into `~/.agents/skills`:
