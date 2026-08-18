@@ -1,6 +1,6 @@
 mod common;
 
-use common::client_for;
+use common::{client_for, excludes_access_token};
 use gitee_api_v5::RepoError;
 use httpmock::Method::GET;
 use httpmock::MockServer;
@@ -11,7 +11,8 @@ fn fetch_repository_sends_optional_token_and_parses_repository() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token);
         then.status(200).json_body(serde_json::json!({
             "full_name": "octo/demo",
             "human_name": "octo/示例",
@@ -58,7 +59,8 @@ fn find_repository_by_human_name_matches_slug_or_human_name() {
     let repos_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user/repos")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token);
         then.status(200).json_body(serde_json::json!([
             {
                 "full_name": "octo/other",

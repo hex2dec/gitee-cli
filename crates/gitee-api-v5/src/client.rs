@@ -1,6 +1,6 @@
 use std::env;
 
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, RequestBuilder};
 
 use crate::utils::resolve_base_url;
 
@@ -23,5 +23,20 @@ impl GiteeClient {
 
     pub fn base_url(&self) -> &str {
         &self.base_url
+    }
+
+    pub(crate) fn with_auth(&self, request: RequestBuilder, token: &str) -> RequestBuilder {
+        request.bearer_auth(token)
+    }
+
+    pub(crate) fn with_optional_auth(
+        &self,
+        request: RequestBuilder,
+        token: Option<&str>,
+    ) -> RequestBuilder {
+        match token {
+            Some(token) => self.with_auth(request, token),
+            None => request,
+        }
     }
 }

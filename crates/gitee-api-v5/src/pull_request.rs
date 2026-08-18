@@ -1,6 +1,6 @@
 use crate::client::GiteeClient;
 use crate::repo::RepoError;
-use crate::utils::parse_api_error_message;
+use crate::utils::{parse_api_error_message, response_indicates_invalid_token};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -36,7 +36,6 @@ pub struct UpdatePullRequest<'a> {
 
 #[derive(Serialize)]
 struct CreatePullRequestPayload<'a> {
-    access_token: &'a str,
     title: &'a str,
     head: &'a str,
     base: &'a str,
@@ -129,14 +128,13 @@ impl GiteeClient {
         number: u64,
         token: Option<&str>,
     ) -> Result<PullRequestResponse, PullRequestError> {
-        let mut request = self.client.get(format!(
-            "{}/v5/repos/{owner}/{repo}/pulls/{number}",
-            self.base_url
-        ));
-
-        if let Some(token) = token {
-            request = request.query(&[("access_token", token)]);
-        }
+        let request = self.with_optional_auth(
+            self.client.get(format!(
+                "{}/v5/repos/{owner}/{repo}/pulls/{number}",
+                self.base_url
+            )),
+            token,
+        );
 
         let response = request.send().map_err(PullRequestError::Transport)?;
 
@@ -146,17 +144,25 @@ impl GiteeClient {
                 .map_err(PullRequestError::Transport);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(PullRequestError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(PullRequestError::NotFound);
         }
 
-        Err(PullRequestError::UnexpectedStatus(
-            response.status().as_u16(),
-        ))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
     }
 
     pub fn fetch_pull_requests(
@@ -166,15 +172,7 @@ impl GiteeClient {
         filters: &PullRequestListFilters,
         token: Option<&str>,
     ) -> Result<Vec<PullRequestResponse>, RepoError> {
-        let mut request = self
-            .client
-            .get(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url));
-
         let mut query = Vec::<(&str, String)>::new();
-
-        if let Some(token) = token {
-            query.push(("access_token", token.to_string()));
-        }
 
         if let Some(state) = filters.state.as_deref() {
             query.push(("state", state.to_string()));
@@ -197,7 +195,13 @@ impl GiteeClient {
         }
 
         query.push(("per_page", filters.limit.to_string()));
-        request = request.query(&query);
+        let request = self
+            .with_optional_auth(
+                self.client
+                    .get(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url)),
+                token,
+            )
+            .query(&query);
 
         let response = request.send().map_err(RepoError::Transport)?;
 
@@ -207,15 +211,19 @@ impl GiteeClient {
                 .map_err(RepoError::Transport);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(RepoError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(RepoError::NotFound);
         }
 
-        Err(RepoError::UnexpectedStatus(response.status().as_u16()))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(RepoError::InvalidToken);
+        }
+
+        Err(RepoError::UnexpectedStatus(status))
     }
 
     pub fn create_pull_request_comment(
@@ -227,12 +235,13 @@ impl GiteeClient {
         request: &CreatePullRequestComment<'_>,
     ) -> Result<PullRequestCommentResponse, PullRequestError> {
         let response = self
-            .client
-            .post(format!(
-                "{}/v5/repos/{owner}/{repo}/pulls/{number}/comments",
-                self.base_url
-            ))
-            .query(&[("access_token", token)])
+            .with_auth(
+                self.client.post(format!(
+                    "{}/v5/repos/{owner}/{repo}/pulls/{number}/comments",
+                    self.base_url
+                )),
+                token,
+            )
             .form(&[("body", request.body)])
             .send()
             .map_err(PullRequestError::Transport)?;
@@ -243,17 +252,25 @@ impl GiteeClient {
                 .map_err(PullRequestError::Transport);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(PullRequestError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(PullRequestError::NotFound);
         }
 
-        Err(PullRequestError::UnexpectedStatus(
-            response.status().as_u16(),
-        ))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(PullRequestError::InvalidToken);
+        }
+
+        if let Some(message) = error_message {
+            return Err(PullRequestError::UnexpectedStatusWithMessage(
+                status, message,
+            ));
+        }
+
+        Err(PullRequestError::UnexpectedStatus(status))
     }
 
     pub fn approve_pull_request(
@@ -264,12 +281,13 @@ impl GiteeClient {
         token: &str,
     ) -> Result<(), PullRequestError> {
         let response = self
-            .client
-            .post(format!(
-                "{}/v5/repos/{owner}/{repo}/pulls/{number}/review",
-                self.base_url
-            ))
-            .query(&[("access_token", token)])
+            .with_auth(
+                self.client.post(format!(
+                    "{}/v5/repos/{owner}/{repo}/pulls/{number}/review",
+                    self.base_url
+                )),
+                token,
+            )
             .send()
             .map_err(PullRequestError::Transport)?;
 
@@ -280,15 +298,7 @@ impl GiteeClient {
         let status = response.status().as_u16();
         let error_message = parse_api_error_message(response);
 
-        let invalid_token_message = error_message.as_deref().is_some_and(|message| {
-            let message = message.to_ascii_lowercase();
-            message.contains("401")
-                || message.contains("unauthorized")
-                || message.contains("invalid token")
-                || message.contains("invalid access token")
-        });
-
-        if status == 401 || (status == 400 && invalid_token_message) {
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
             return Err(PullRequestError::InvalidToken);
         }
 
@@ -313,10 +323,12 @@ impl GiteeClient {
         request: &CreatePullRequest<'_>,
     ) -> Result<PullRequestResponse, PullRequestError> {
         let response = self
-            .client
-            .post(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url))
+            .with_auth(
+                self.client
+                    .post(format!("{}/v5/repos/{owner}/{repo}/pulls", self.base_url)),
+                token,
+            )
             .json(&CreatePullRequestPayload {
-                access_token: token,
                 title: request.title,
                 head: request.head,
                 base: request.base,
@@ -334,7 +346,7 @@ impl GiteeClient {
         let status = response.status().as_u16();
         let error_message = parse_api_error_message(response);
 
-        if status == 401 {
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
             return Err(PullRequestError::InvalidToken);
         }
 
@@ -359,7 +371,7 @@ impl GiteeClient {
         token: &str,
         request: &UpdatePullRequest<'_>,
     ) -> Result<PullRequestResponse, PullRequestError> {
-        let mut form = vec![("access_token", token.to_string())];
+        let mut form = Vec::<(&str, String)>::new();
 
         if let Some(title) = request.title {
             form.push(("title", title.to_string()));
@@ -378,12 +390,13 @@ impl GiteeClient {
         }
 
         let response = self
-            .client
-            .patch(format!(
-                "{}/v5/repos/{owner}/{repo}/pulls/{number}",
-                self.base_url
-            ))
-            .query(&[("access_token", token)])
+            .with_auth(
+                self.client.patch(format!(
+                    "{}/v5/repos/{owner}/{repo}/pulls/{number}",
+                    self.base_url
+                )),
+                token,
+            )
             .form(&form)
             .send()
             .map_err(PullRequestError::Transport)?;
@@ -397,7 +410,7 @@ impl GiteeClient {
         let status = response.status().as_u16();
         let error_message = parse_api_error_message(response);
 
-        if status == 401 {
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
             return Err(PullRequestError::InvalidToken);
         }
 
@@ -423,12 +436,13 @@ impl GiteeClient {
         request: &MergePullRequest<'_>,
     ) -> Result<PullRequestMergeResponse, PullRequestError> {
         let response = self
-            .client
-            .put(format!(
-                "{}/v5/repos/{owner}/{repo}/pulls/{number}/merge",
-                self.base_url
-            ))
-            .query(&[("access_token", token)])
+            .with_auth(
+                self.client.put(format!(
+                    "{}/v5/repos/{owner}/{repo}/pulls/{number}/merge",
+                    self.base_url
+                )),
+                token,
+            )
             .json(&MergePullRequestPayload {
                 merge_method: request.merge_method,
             })
@@ -444,7 +458,7 @@ impl GiteeClient {
         let status = response.status().as_u16();
         let error_message = parse_api_error_message(response);
 
-        if status == 401 {
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
             return Err(PullRequestError::InvalidToken);
         }
 

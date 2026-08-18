@@ -13,7 +13,7 @@ fn pr_create_uses_explicit_head_and_inferred_base_in_json_output() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "full_name": "octo/demo",
             "path": "demo",
@@ -29,7 +29,7 @@ fn pr_create_uses_explicit_head_and_inferred_base_in_json_output() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
             .header("content-type", "application/json")
-            .body_contains("\"access_token\":\"secret-token\"")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"title\":\"Add PR create\"")
             .body_contains("\"head\":\"feature/pr-create\"")
             .body_contains("\"base\":\"main\"")
@@ -86,7 +86,7 @@ fn pr_create_supports_gh_style_json_field_selection() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "full_name": "octo/demo",
             "path": "demo",
@@ -102,7 +102,7 @@ fn pr_create_supports_gh_style_json_field_selection() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
             .header("content-type", "application/json")
-            .body_contains("\"access_token\":\"secret-token\"")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"title\":\"Add PR create\"")
             .body_contains("\"head\":\"feature/pr-create\"")
             .body_contains("\"base\":\"main\"")
@@ -169,7 +169,7 @@ fn pr_create_infers_local_head_and_renders_text_output() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
             .header("content-type", "application/json")
-            .body_contains("\"access_token\":\"secret-token\"")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"title\":\"Use local head\"")
             .body_contains("\"head\":\"feature/local-head\"")
             .body_contains("\"base\":\"develop\"")
@@ -228,7 +228,7 @@ fn pr_create_reads_body_from_a_file() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
             .header("content-type", "application/json")
-            .body_contains("\"access_token\":\"secret-token\"")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"title\":\"Read body file\"")
             .body_contains("\"head\":\"feature/body-file\"")
             .body_contains("\"base\":\"main\"")
@@ -283,7 +283,7 @@ fn pr_create_reads_body_from_stdin_via_body_file_dash() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
             .header("content-type", "application/json")
-            .body_contains("\"access_token\":\"secret-token\"")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"title\":\"Read stdin\"")
             .body_contains("\"head\":\"feature/stdin\"")
             .body_contains("\"base\":\"main\"")
@@ -477,7 +477,7 @@ fn pr_create_surfaces_remote_validation_errors_instead_of_auth_failure() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "full_name": "octo/demo",
             "path": "demo",

@@ -1,6 +1,6 @@
 mod common;
 
-use common::client_for;
+use common::{client_for, excludes_access_token};
 use gitee_api_v5::{
     CreatePullRequest, CreatePullRequestComment, MergePullRequest, PullRequestError,
     PullRequestListFilters, UpdatePullRequest,
@@ -46,7 +46,8 @@ fn fetch_pull_requests_sends_filters_and_parses_results() {
     let pulls_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token)
             .query_param("state", "open")
             .query_param("author", "octocat")
             .query_param("assignee", "reviewer")
@@ -88,8 +89,9 @@ fn create_pull_request_sends_json_body_and_parses_response() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token)
             .json_body(serde_json::json!({
-                "access_token": "secret-token",
                 "title": "Improve API tests",
                 "head": "feature/api-tests",
                 "base": "main",
@@ -123,8 +125,8 @@ fn update_pull_request_sends_form_fields_and_parses_response() {
     let update_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/42")
-            .query_param("access_token", "secret-token")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token)
             .body_contains("title=Updated+title")
             .body_contains("body=Updated+body")
             .body_contains("state=closed")
@@ -152,12 +154,13 @@ fn update_pull_request_sends_form_fields_and_parses_response() {
 }
 
 #[test]
-fn create_pull_request_comment_sends_token_query_and_form_body() {
+fn create_pull_request_comment_sends_auth_header_and_form_body() {
     let server = MockServer::start();
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token)
             .body_contains("body=Looks+good");
         then.status(201).json_body(serde_json::json!({
             "id": 7,
@@ -192,7 +195,8 @@ fn approve_pull_request_maps_invalid_token_response() {
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
-            .query_param("access_token", "bad-token");
+            .header("authorization", "Bearer bad-token")
+            .matches(excludes_access_token);
         then.status(400).json_body(serde_json::json!({
             "message": "401 Unauthorized"
         }));
@@ -210,7 +214,8 @@ fn approve_pull_request_sends_token_to_review_endpoint() {
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token);
         then.status(201);
     });
 
@@ -227,7 +232,8 @@ fn approve_pull_request_preserves_non_auth_validation_errors() {
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token);
         then.status(400).json_body(serde_json::json!({
             "message": "pull request has already been reviewed"
         }));
@@ -250,7 +256,8 @@ fn merge_pull_request_sends_merge_method_and_parses_response() {
     let merge_mock = server.mock(|when, then| {
         when.method(PUT)
             .path("/v5/repos/octo/demo/pulls/42/merge")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token)
             .json_body(serde_json::json!({
                 "merge_method": "squash"
             }));
@@ -282,7 +289,10 @@ fn merge_pull_request_sends_merge_method_and_parses_response() {
 fn merge_pull_request_preserves_api_error_description() {
     let server = MockServer::start();
     let merge_mock = server.mock(|when, then| {
-        when.method(PUT).path("/v5/repos/octo/demo/pulls/42/merge");
+        when.method(PUT)
+            .path("/v5/repos/octo/demo/pulls/42/merge")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token);
         then.status(409).json_body(serde_json::json!({
             "error_description": "pull request has conflicts"
         }));

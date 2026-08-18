@@ -14,7 +14,7 @@ fn pr_status_summarizes_current_branch_and_current_user_in_json_output() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "login": "octocat"
         }));
@@ -23,7 +23,7 @@ fn pr_status_summarizes_current_branch_and_current_user_in_json_output() {
     let current_branch_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("state", "open")
             .query_param("head", "feature/status")
             .query_param("per_page", "10");
@@ -40,7 +40,7 @@ fn pr_status_summarizes_current_branch_and_current_user_in_json_output() {
     let authored_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("state", "open")
             .query_param("author", "octocat")
             .query_param("per_page", "10");
@@ -57,7 +57,7 @@ fn pr_status_summarizes_current_branch_and_current_user_in_json_output() {
     let assigned_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("state", "open")
             .query_param("assignee", "octocat")
             .query_param("per_page", "10");
@@ -106,7 +106,7 @@ fn pr_status_supports_gh_style_json_field_selection() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "login": "octocat"
         }));
@@ -115,7 +115,7 @@ fn pr_status_supports_gh_style_json_field_selection() {
     let current_branch_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("head", "feature/status")
             .query_param("per_page", "30");
         then.status(200)
@@ -131,7 +131,7 @@ fn pr_status_supports_gh_style_json_field_selection() {
     let authored_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("author", "octocat")
             .query_param("per_page", "30");
         then.status(200)
@@ -147,7 +147,7 @@ fn pr_status_supports_gh_style_json_field_selection() {
     let assigned_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("assignee", "octocat")
             .query_param("per_page", "30");
         then.status(200)
@@ -210,7 +210,7 @@ fn pr_status_supports_extended_gh_style_json_fields() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "login": "octocat"
         }));
@@ -219,7 +219,7 @@ fn pr_status_supports_extended_gh_style_json_fields() {
     let current_branch_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("head", "feature/status")
             .query_param("per_page", "30");
         then.status(200)
@@ -235,7 +235,7 @@ fn pr_status_supports_extended_gh_style_json_fields() {
     let authored_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("author", "octocat")
             .query_param("per_page", "30");
         then.status(200).json_body(serde_json::json!([]));
@@ -244,7 +244,7 @@ fn pr_status_supports_extended_gh_style_json_fields() {
     let assigned_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("assignee", "octocat")
             .query_param("per_page", "30");
         then.status(200).json_body(serde_json::json!([]));
@@ -315,7 +315,7 @@ fn pr_status_supports_default_text_output() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "login": "octocat"
         }));
@@ -324,7 +324,7 @@ fn pr_status_supports_default_text_output() {
     let current_branch_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("head", "feature/status")
             .query_param("per_page", "30");
         then.status(200)
@@ -340,7 +340,7 @@ fn pr_status_supports_default_text_output() {
     let authored_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("author", "octocat")
             .query_param("per_page", "30");
         then.status(200)
@@ -356,7 +356,7 @@ fn pr_status_supports_default_text_output() {
     let assigned_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .query_param("assignee", "octocat")
             .query_param("per_page", "30");
         then.status(200)

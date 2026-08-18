@@ -26,6 +26,29 @@ pub(crate) fn parse_api_error_message(response: reqwest::blocking::Response) -> 
     Some(body)
 }
 
+pub(crate) fn response_indicates_invalid_token(status: u16, error_message: Option<&str>) -> bool {
+    if status == 401 {
+        return true;
+    }
+
+    if status != 400 {
+        return false;
+    }
+
+    error_message.is_some_and(message_indicates_invalid_token)
+}
+
+fn message_indicates_invalid_token(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+
+    message.contains("401")
+        || message.contains("unauthorized")
+        || message.contains("invalid token")
+        || message.contains("invalid access token")
+        || message.contains("access token")
+        || message.contains("access_token")
+}
+
 pub(crate) fn resolve_base_url(value: Option<String>) -> String {
     value
         .unwrap_or_else(|| "https://gitee.com/api".to_string())
@@ -35,7 +58,7 @@ pub(crate) fn resolve_base_url(value: Option<String>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_base_url;
+    use super::{resolve_base_url, response_indicates_invalid_token};
 
     #[test]
     fn defaults_to_gitee_api_base_path() {
@@ -48,5 +71,26 @@ mod tests {
             resolve_base_url(Some("http://127.0.0.1:1234/".to_string())),
             "http://127.0.0.1:1234"
         );
+    }
+
+    #[test]
+    fn maps_unauthorized_status_to_invalid_token() {
+        assert!(response_indicates_invalid_token(401, None));
+    }
+
+    #[test]
+    fn maps_explicit_access_token_message_to_invalid_token() {
+        assert!(response_indicates_invalid_token(
+            400,
+            Some("invalid access token")
+        ));
+    }
+
+    #[test]
+    fn does_not_map_generic_bad_request_token_text_to_invalid_token() {
+        assert!(!response_indicates_invalid_token(
+            400,
+            Some("title token placeholder cannot be blank")
+        ));
     }
 }

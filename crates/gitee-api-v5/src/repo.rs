@@ -1,4 +1,5 @@
 use crate::client::GiteeClient;
+use crate::utils::{parse_api_error_message, response_indicates_invalid_token};
 use serde::Deserialize;
 
 #[derive(Debug)]
@@ -39,13 +40,11 @@ impl GiteeClient {
         repo: &str,
         token: Option<&str>,
     ) -> Result<RepositoryResponse, RepoError> {
-        let mut request = self
-            .client
-            .get(format!("{}/v5/repos/{owner}/{repo}", self.base_url));
-
-        if let Some(token) = token {
-            request = request.query(&[("access_token", token)]);
-        }
+        let request = self.with_optional_auth(
+            self.client
+                .get(format!("{}/v5/repos/{owner}/{repo}", self.base_url)),
+            token,
+        );
 
         let response = request.send().map_err(RepoError::Transport)?;
 
@@ -56,15 +55,19 @@ impl GiteeClient {
             return Ok(repository);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(RepoError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(RepoError::NotFound);
         }
 
-        Err(RepoError::UnexpectedStatus(response.status().as_u16()))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(RepoError::InvalidToken);
+        }
+
+        Err(RepoError::UnexpectedStatus(status))
     }
 
     pub fn find_repository_by_human_name(
@@ -74,9 +77,10 @@ impl GiteeClient {
         token: &str,
     ) -> Result<Option<RepositoryResponse>, RepoError> {
         let response = self
-            .client
-            .get(format!("{}/v5/user/repos", self.base_url))
-            .query(&[("access_token", token)])
+            .with_auth(
+                self.client.get(format!("{}/v5/user/repos", self.base_url)),
+                token,
+            )
             .send()
             .map_err(RepoError::Transport)?;
 
@@ -89,10 +93,13 @@ impl GiteeClient {
             return Ok(repository);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
+        let status = response.status().as_u16();
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
             return Err(RepoError::InvalidToken);
         }
 
-        Err(RepoError::UnexpectedStatus(response.status().as_u16()))
+        Err(RepoError::UnexpectedStatus(status))
     }
 }

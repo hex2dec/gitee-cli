@@ -1,6 +1,6 @@
 mod common;
 
-use common::client_for;
+use common::{client_for, excludes_access_token};
 use gitee_api_v5::{CreateIssue, IssueError, IssueListOptions, UpdateIssue};
 use httpmock::Method::{GET, PATCH, POST};
 use httpmock::MockServer;
@@ -15,7 +15,8 @@ fn list_repository_issues_sends_filters_and_parses_results() {
             .query_param("q", "panic")
             .query_param("page", "2")
             .query_param("per_page", "5")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token);
         then.status(200).json_body(serde_json::json!([
             {
                 "number": "I123",
@@ -63,7 +64,8 @@ fn create_issue_sends_form_body_and_parses_response() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token)
             .body_contains("repo=demo")
             .body_contains("title=Add+crate+tests")
             .body_contains("body=Public+API+coverage");
@@ -103,7 +105,10 @@ fn create_issue_sends_form_body_and_parses_response() {
 fn create_issue_preserves_api_error_message() {
     let server = MockServer::start();
     let create_mock = server.mock(|when, then| {
-        when.method(POST).path("/v5/repos/octo/issues");
+        when.method(POST)
+            .path("/v5/repos/octo/issues")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token);
         then.status(422).json_body(serde_json::json!({
             "message": "title cannot be blank"
         }));
@@ -134,7 +139,8 @@ fn update_issue_sends_patch_fields_and_parses_response() {
     let update_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I125")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
+            .matches(excludes_access_token)
             .body_contains("repo=demo")
             .body_contains("title=Updated+issue")
             .body_contains("body=Updated+body")

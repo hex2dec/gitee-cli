@@ -213,7 +213,7 @@ fn issue_create_uses_local_repo_context_and_reports_stable_json_output() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("title=Add+issue+create")
             .body_contains("body=Creates+an+issue+from+the+CLI");
@@ -301,7 +301,7 @@ fn issue_create_uses_explicit_repo_and_renders_text_output() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("title=Use+explicit+repo")
             .body_contains("body=Created+with+an+explicit+repo");
@@ -364,7 +364,7 @@ fn issue_create_reads_body_from_a_file() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("title=Read+issue+body+file")
             .body_contains("body=Generated+from+a+file");
@@ -418,7 +418,7 @@ fn issue_create_reads_body_from_stdin_via_body_file_dash() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("title=Read+issue+stdin")
             .body_contains("body=Generated+from+stdin%0A");
@@ -473,7 +473,7 @@ fn issue_create_surfaces_remote_validation_errors_instead_of_auth_failure() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("title=Bad");
         then.status(400).json_body(serde_json::json!({
@@ -533,7 +533,7 @@ fn issue_create_fails_when_authentication_is_rejected() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=bad-token")
+            .header("authorization", "Bearer bad-token")
             .body_contains("repo=demo")
             .body_contains("title=Needs+auth");
         then.status(401).json_body(serde_json::json!({
@@ -573,7 +573,7 @@ fn issue_create_fails_when_repository_is_missing() {
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
-            .body_contains("access_token=secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("title=Missing+repo");
         then.status(404).json_body(serde_json::json!({
@@ -690,7 +690,7 @@ fn issue_comment_posts_a_reply_from_a_direct_body_flag() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Thanks+for+the+detailed+report");
         then.status(201).json_body(serde_json::json!({
             "id": 99,
@@ -747,7 +747,7 @@ fn issue_comment_supports_body_file_input_and_stable_text_output() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Posted+from+file");
         then.status(201).json_body(serde_json::json!({
             "id": 100,
@@ -801,7 +801,7 @@ fn issue_comment_supports_stdin_body_input_via_body_file_dash() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Posted+from+stdin");
         then.status(201).json_body(serde_json::json!({
             "id": 101,
@@ -851,7 +851,7 @@ fn issue_comment_fails_when_issue_is_missing() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I404/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Missing+issue+comment");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
@@ -891,7 +891,7 @@ fn issue_comment_fails_when_authentication_is_rejected() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
-            .query_param("access_token", "bad-token")
+            .header("authorization", "Bearer bad-token")
             .body_contains("body=Needs+auth");
         then.status(401).json_body(serde_json::json!({
             "message": "Unauthorized"

@@ -59,7 +59,7 @@ fn auth_login_persists_the_validated_token_for_later_status_checks() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "valid-token");
+            .header("authorization", "Bearer valid-token");
         then.status(200).json_body(serde_json::json!({
             "login": "octocat"
         }));
@@ -109,7 +109,7 @@ fn auth_login_uses_a_stable_user_level_config_dir_by_default() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "home-token");
+            .header("authorization", "Bearer home-token");
         then.status(200).json_body(serde_json::json!({
             "login": "home-user"
         }));
@@ -170,7 +170,7 @@ fn auth_login_can_read_the_token_from_stdin() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "stdin-token");
+            .header("authorization", "Bearer stdin-token");
         then.status(200).json_body(serde_json::json!({
             "login": "stdin-user"
         }));
@@ -217,7 +217,7 @@ fn auth_login_accepts_json_flag_before_token_flag() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "ordered-token");
+            .header("authorization", "Bearer ordered-token");
         then.status(200).json_body(serde_json::json!({
             "login": "ordered-user"
         }));
@@ -248,7 +248,7 @@ fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
     let config_token_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "config-token");
+            .header("authorization", "Bearer config-token");
         then.status(200).json_body(serde_json::json!({
             "login": "config-user"
         }));
@@ -257,7 +257,7 @@ fn auth_status_prefers_the_environment_token_over_the_saved_config_token() {
     let env_token_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "env-token");
+            .header("authorization", "Bearer env-token");
         then.status(200).json_body(serde_json::json!({
             "login": "env-user"
         }));
@@ -300,7 +300,7 @@ fn auth_logout_clears_the_saved_token_and_restores_unauthenticated_status() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "config-token");
+            .header("authorization", "Bearer config-token");
         then.status(200).json_body(serde_json::json!({
             "login": "config-user"
         }));
