@@ -1,6 +1,6 @@
 use crate::client::GiteeClient;
 use crate::utils::ApiResponseError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub enum IssueError {
@@ -47,6 +47,30 @@ pub struct IssueListOptions<'a> {
     pub search: Option<&'a str>,
     pub page: u32,
     pub per_page: u32,
+}
+
+#[derive(Serialize)]
+struct CreateIssuePayload<'a> {
+    repo: &'a str,
+    title: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+struct IssueCommentPayload<'a> {
+    body: &'a str,
+}
+
+#[derive(Serialize)]
+struct UpdateIssuePayload<'a> {
+    repo: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -200,7 +224,7 @@ impl GiteeClient {
                 )),
                 token,
             )
-            .form(&[("body", body)])
+            .json(&IssueCommentPayload { body })
             .send()
             .map_err(IssueError::Transport)?;
 
@@ -219,22 +243,17 @@ impl GiteeClient {
         token: &str,
         request: &CreateIssue<'_>,
     ) -> Result<IssueResponse, IssueError> {
-        let mut form = vec![
-            ("repo", request.repo.to_string()),
-            ("title", request.title.to_string()),
-        ];
-
-        if let Some(body) = request.body {
-            form.push(("body", body.to_string()));
-        }
-
         let response = self
             .with_auth(
                 self.client
                     .post(format!("{}/v5/repos/{owner}/issues", self.base_url)),
                 token,
             )
-            .form(&form)
+            .json(&CreateIssuePayload {
+                repo: request.repo,
+                title: request.title,
+                body: request.body,
+            })
             .send()
             .map_err(IssueError::Transport)?;
 
@@ -254,20 +273,6 @@ impl GiteeClient {
         token: &str,
         request: &UpdateIssue<'_>,
     ) -> Result<IssueResponse, IssueError> {
-        let mut form = vec![("repo", request.repo.to_string())];
-
-        if let Some(title) = request.title {
-            form.push(("title", title.to_string()));
-        }
-
-        if let Some(body) = request.body {
-            form.push(("body", body.to_string()));
-        }
-
-        if let Some(state) = request.state {
-            form.push(("state", state.to_string()));
-        }
-
         let response = self
             .with_auth(
                 self.client.patch(format!(
@@ -276,7 +281,12 @@ impl GiteeClient {
                 )),
                 token,
             )
-            .form(&form)
+            .json(&UpdateIssuePayload {
+                repo: request.repo,
+                title: request.title,
+                body: request.body,
+                state: request.state,
+            })
             .send()
             .map_err(IssueError::Transport)?;
 

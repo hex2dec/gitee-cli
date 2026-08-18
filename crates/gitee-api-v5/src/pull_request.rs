@@ -53,6 +53,14 @@ pub struct UpdatePullRequest<'a> {
 }
 
 #[derive(Serialize)]
+struct CreatePullRequestCommentPayload<'a> {
+    body: &'a str,
+}
+
+#[derive(Serialize)]
+struct ApprovePullRequestPayload {}
+
+#[derive(Serialize)]
 struct CreatePullRequestPayload<'a> {
     title: &'a str,
     head: &'a str,
@@ -64,6 +72,18 @@ struct CreatePullRequestPayload<'a> {
 #[derive(Serialize)]
 struct MergePullRequestPayload<'a> {
     merge_method: &'a str,
+}
+
+#[derive(Serialize)]
+struct UpdatePullRequestPayload<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    draft: Option<bool>,
 }
 
 #[derive(Clone)]
@@ -232,7 +252,7 @@ impl GiteeClient {
                 )),
                 token,
             )
-            .form(&[("body", request.body)])
+            .json(&CreatePullRequestCommentPayload { body: request.body })
             .send()
             .map_err(PullRequestError::Transport)?;
 
@@ -262,6 +282,7 @@ impl GiteeClient {
                 )),
                 token,
             )
+            .json(&ApprovePullRequestPayload {})
             .send()
             .map_err(PullRequestError::Transport)?;
 
@@ -311,24 +332,6 @@ impl GiteeClient {
         token: &str,
         request: &UpdatePullRequest<'_>,
     ) -> Result<PullRequestResponse, PullRequestError> {
-        let mut form = Vec::<(&str, String)>::new();
-
-        if let Some(title) = request.title {
-            form.push(("title", title.to_string()));
-        }
-
-        if let Some(body) = request.body {
-            form.push(("body", body.to_string()));
-        }
-
-        if let Some(state) = request.state {
-            form.push(("state", state.to_string()));
-        }
-
-        if let Some(draft) = request.draft {
-            form.push(("draft", draft.to_string()));
-        }
-
         let response = self
             .with_auth(
                 self.client.patch(format!(
@@ -337,7 +340,12 @@ impl GiteeClient {
                 )),
                 token,
             )
-            .form(&form)
+            .json(&UpdatePullRequestPayload {
+                title: request.title,
+                body: request.body,
+                state: request.state,
+                draft: request.draft,
+            })
             .send()
             .map_err(PullRequestError::Transport)?;
 

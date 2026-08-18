@@ -14,9 +14,11 @@ fn issue_edit_updates_title_with_explicit_repo_and_selected_json_fields() {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I123")
             .header("authorization", "Bearer secret-token")
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body_contains("repo=demo")
-            .body_contains("title=Updated+title");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Updated title"
+            }));
         then.status(200).json_body(serde_json::json!({
             "number": "I123",
             "title": "Updated title",
@@ -70,9 +72,12 @@ fn issue_edit_reads_body_from_stdin_updates_state_and_renders_text_output() {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I124")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("body=Generated+from+stdin%0A")
-            .body_contains("state=closed");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "body": "Generated from stdin\n",
+                "state": "closed"
+            }));
         then.status(200).json_body(serde_json::json!({
             "number": "I124",
             "title": "Close completed issue",
@@ -136,8 +141,11 @@ fn issue_edit_allows_clearing_body_with_an_explicit_empty_string() {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I125")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("body=");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "body": ""
+            }));
         then.status(200).json_body(serde_json::json!({
             "number": "I125",
             "title": "Clear body",
@@ -332,7 +340,11 @@ fn issue_edit_fails_when_issue_is_missing() {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I404")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Missing issue"
+            }));
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -372,7 +384,11 @@ fn issue_edit_surfaces_remote_validation_errors() {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I126")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "state": "closed"
+            }));
         then.status(400).json_body(serde_json::json!({
             "message": "state transition is not allowed"
         }));
