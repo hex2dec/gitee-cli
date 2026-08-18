@@ -12,7 +12,7 @@ fn auth_login_accepts_equals_syntax_for_long_options() {
     let user_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user")
-            .query_param("access_token", "inline-token");
+            .header("authorization", "Bearer inline-token");
         then.status(200).json_body(serde_json::json!({
             "login": "inline-user"
         }));
@@ -99,7 +99,7 @@ fn issue_comment_accepts_a_hyphen_prefixed_body_value() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=--token%3Dabc");
         then.status(201).json_body(serde_json::json!({
             "id": 321,

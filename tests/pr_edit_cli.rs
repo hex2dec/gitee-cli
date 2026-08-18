@@ -13,7 +13,7 @@ fn pr_edit_updates_title_with_explicit_repo_in_json_output() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/42")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .header("content-type", "application/x-www-form-urlencoded")
             .body_contains("title=Updated+title");
         then.status(200).json_body(pull_request_payload(
@@ -67,7 +67,7 @@ fn pr_edit_resolves_human_name_remote_to_canonical_private_repo() {
     let direct_edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/hzw/tip-ucan/pulls/42")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("title=Canonical+title");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
@@ -77,7 +77,7 @@ fn pr_edit_resolves_human_name_remote_to_canonical_private_repo() {
     let repo_list_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user/repos")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!([
             {
                 "full_name": "hzw-dev/tip-ucan",
@@ -94,7 +94,7 @@ fn pr_edit_resolves_human_name_remote_to_canonical_private_repo() {
     let canonical_edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/hzw-dev/tip-ucan/pulls/42")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("title=Canonical+title");
         then.status(200).json_body(serde_json::json!({
             "number": 42,
@@ -157,7 +157,7 @@ fn pr_edit_reads_body_from_stdin_marks_ready_and_renders_text_output() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/44")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Generated+from+stdin%0A")
             .body_contains("draft=false");
         then.status(200).json_body(pull_request_payload(
@@ -207,7 +207,7 @@ fn pr_edit_allows_clearing_body_with_an_explicit_empty_string() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/45")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=");
         then.status(200).json_body(pull_request_payload(
             45,
@@ -254,7 +254,7 @@ fn pr_edit_updates_state_to_closed() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/46")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("state=closed");
         then.status(200).json_body(serde_json::json!({
             "number": 46,
@@ -420,7 +420,7 @@ fn pr_edit_fails_when_pull_request_is_missing() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/404")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -429,7 +429,7 @@ fn pr_edit_fails_when_pull_request_is_missing() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "full_name": "octo/demo",
             "path": "demo",
@@ -475,7 +475,7 @@ fn pr_edit_fails_when_repository_is_missing() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/missing/pulls/404")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -484,7 +484,7 @@ fn pr_edit_fails_when_repository_is_missing() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/missing")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -524,7 +524,7 @@ fn pr_edit_surfaces_remote_validation_errors() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/47")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(400).json_body(serde_json::json!({
             "message": "state transition is not allowed"
         }));

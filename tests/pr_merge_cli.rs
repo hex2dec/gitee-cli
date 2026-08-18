@@ -13,7 +13,7 @@ fn pr_merge_uses_default_merge_strategy_in_json_output() {
     let merge_mock = server.mock(|when, then| {
         when.method(PUT)
             .path("/v5/repos/octo/demo/pulls/42/merge")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .header("content-type", "application/json")
             .body_contains("\"merge_method\":\"merge\"");
         then.status(200).json_body(serde_json::json!({
@@ -53,7 +53,7 @@ fn pr_merge_supports_squash_strategy_with_local_repo_context() {
     let merge_mock = server.mock(|when, then| {
         when.method(PUT)
             .path("/v5/repos/octo/demo/pulls/43/merge")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .header("content-type", "application/json")
             .body_contains("\"merge_method\":\"squash\"");
         then.status(200).json_body(serde_json::json!({
@@ -95,7 +95,7 @@ fn pr_merge_resolves_human_name_remote_to_canonical_private_repo() {
     let direct_merge_mock = server.mock(|when, then| {
         when.method(PUT)
             .path("/v5/repos/hzw/tip-ucan/pulls/44/merge")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"merge_method\":\"rebase\"");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
@@ -105,7 +105,7 @@ fn pr_merge_resolves_human_name_remote_to_canonical_private_repo() {
     let repo_list_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user/repos")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!([
             {
                 "full_name": "hzw-dev/tip-ucan",
@@ -122,7 +122,7 @@ fn pr_merge_resolves_human_name_remote_to_canonical_private_repo() {
     let canonical_merge_mock = server.mock(|when, then| {
         when.method(PUT)
             .path("/v5/repos/hzw-dev/tip-ucan/pulls/44/merge")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"merge_method\":\"rebase\"");
         then.status(200).json_body(serde_json::json!({
             "sha": "fedcba",
@@ -204,7 +204,7 @@ fn pr_merge_surfaces_remote_validation_errors() {
     let merge_mock = server.mock(|when, then| {
         when.method(PUT)
             .path("/v5/repos/octo/demo/pulls/45/merge")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("\"merge_method\":\"merge\"");
         then.status(405).json_body(serde_json::json!({
             "message": "pull request is not mergeable"

@@ -13,7 +13,7 @@ fn issue_edit_updates_title_with_explicit_repo_and_selected_json_fields() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I123")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .header("content-type", "application/x-www-form-urlencoded")
             .body_contains("repo=demo")
             .body_contains("title=Updated+title");
@@ -69,7 +69,7 @@ fn issue_edit_reads_body_from_stdin_updates_state_and_renders_text_output() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I124")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("body=Generated+from+stdin%0A")
             .body_contains("state=closed");
@@ -135,7 +135,7 @@ fn issue_edit_allows_clearing_body_with_an_explicit_empty_string() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I125")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo")
             .body_contains("body=");
         then.status(200).json_body(serde_json::json!({
@@ -331,7 +331,7 @@ fn issue_edit_fails_when_issue_is_missing() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I404")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
@@ -371,7 +371,7 @@ fn issue_edit_surfaces_remote_validation_errors() {
     let edit_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I126")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("repo=demo");
         then.status(400).json_body(serde_json::json!({
             "message": "state transition is not allowed"

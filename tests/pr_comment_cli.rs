@@ -14,7 +14,7 @@ fn pr_comment_posts_a_general_comment_from_local_repo_context_in_json_output() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/42")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200)
             .json_body(pull_request_payload(42, "feature/comment"));
     });
@@ -22,7 +22,7 @@ fn pr_comment_posts_a_general_comment_from_local_repo_context_in_json_output() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Ship+it");
         then.status(201).json_body(serde_json::json!({
             "id": 101,
@@ -71,7 +71,7 @@ fn pr_comment_reads_body_from_a_file_and_renders_text_output() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/43")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200)
             .json_body(pull_request_payload(43, "feature/file"));
     });
@@ -79,7 +79,7 @@ fn pr_comment_reads_body_from_a_file_and_renders_text_output() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/43/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Looks+good+to+me");
         then.status(201).json_body(serde_json::json!({
             "id": 102,
@@ -133,7 +133,7 @@ fn pr_comment_reads_body_from_stdin_via_body_file_dash() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/44")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200)
             .json_body(pull_request_payload(44, "feature/stdin"));
     });
@@ -141,7 +141,7 @@ fn pr_comment_reads_body_from_stdin_via_body_file_dash() {
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/44/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Generated+from+stdin%0A");
         then.status(201).json_body(serde_json::json!({
             "id": 103,
@@ -267,7 +267,7 @@ fn pr_comment_reports_a_missing_pull_request() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/404")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -276,7 +276,7 @@ fn pr_comment_reports_a_missing_pull_request() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "full_name": "octo/demo",
             "path": "demo",

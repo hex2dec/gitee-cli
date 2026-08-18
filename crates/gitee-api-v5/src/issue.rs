@@ -1,5 +1,5 @@
 use crate::client::GiteeClient;
-use crate::utils::parse_api_error_message;
+use crate::utils::{parse_api_error_message, response_indicates_invalid_token};
 use serde::Deserialize;
 
 #[derive(Debug)]
@@ -86,13 +86,12 @@ impl GiteeClient {
             query.push(("q", search.to_string()));
         }
 
-        if let Some(token) = token {
-            query.push(("access_token", token.to_string()));
-        }
-
         let response = self
-            .client
-            .get(format!("{}/v5/repos/{owner}/{repo}/issues", self.base_url))
+            .with_optional_auth(
+                self.client
+                    .get(format!("{}/v5/repos/{owner}/{repo}/issues", self.base_url)),
+                token,
+            )
             .query(&query)
             .send()
             .map_err(IssueError::Transport)?;
@@ -103,15 +102,23 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(IssueError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(IssueError::NotFound);
         }
 
-        Err(IssueError::UnexpectedStatus(response.status().as_u16()))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(IssueError::InvalidToken);
+        }
+
+        if let Some(message) = error_message {
+            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
+        }
+
+        Err(IssueError::UnexpectedStatus(status))
     }
 
     pub fn fetch_issue(
@@ -121,14 +128,13 @@ impl GiteeClient {
         number: &str,
         token: Option<&str>,
     ) -> Result<IssueResponse, IssueError> {
-        let mut request = self.client.get(format!(
-            "{}/v5/repos/{owner}/{repo}/issues/{number}",
-            self.base_url
-        ));
-
-        if let Some(token) = token {
-            request = request.query(&[("access_token", token)]);
-        }
+        let request = self.with_optional_auth(
+            self.client.get(format!(
+                "{}/v5/repos/{owner}/{repo}/issues/{number}",
+                self.base_url
+            )),
+            token,
+        );
 
         let response = request.send().map_err(IssueError::Transport)?;
 
@@ -138,15 +144,23 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(IssueError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(IssueError::NotFound);
         }
 
-        Err(IssueError::UnexpectedStatus(response.status().as_u16()))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(IssueError::InvalidToken);
+        }
+
+        if let Some(message) = error_message {
+            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
+        }
+
+        Err(IssueError::UnexpectedStatus(status))
     }
 
     pub fn list_issue_comments(
@@ -158,21 +172,19 @@ impl GiteeClient {
         page: u32,
         per_page: u32,
     ) -> Result<Vec<IssueCommentResponse>, IssueError> {
-        let mut query = vec![
+        let query = vec![
             ("page", page.to_string()),
             ("per_page", per_page.to_string()),
         ];
 
-        if let Some(token) = token {
-            query.push(("access_token", token.to_string()));
-        }
-
         let response = self
-            .client
-            .get(format!(
-                "{}/v5/repos/{owner}/{repo}/issues/{number}/comments",
-                self.base_url
-            ))
+            .with_optional_auth(
+                self.client.get(format!(
+                    "{}/v5/repos/{owner}/{repo}/issues/{number}/comments",
+                    self.base_url
+                )),
+                token,
+            )
             .query(&query)
             .send()
             .map_err(IssueError::Transport)?;
@@ -183,15 +195,23 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(IssueError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(IssueError::NotFound);
         }
 
-        Err(IssueError::UnexpectedStatus(response.status().as_u16()))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(IssueError::InvalidToken);
+        }
+
+        if let Some(message) = error_message {
+            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
+        }
+
+        Err(IssueError::UnexpectedStatus(status))
     }
 
     pub fn create_issue_comment(
@@ -203,12 +223,13 @@ impl GiteeClient {
         body: &str,
     ) -> Result<IssueCommentResponse, IssueError> {
         let response = self
-            .client
-            .post(format!(
-                "{}/v5/repos/{owner}/{repo}/issues/{number}/comments",
-                self.base_url
-            ))
-            .query(&[("access_token", token)])
+            .with_auth(
+                self.client.post(format!(
+                    "{}/v5/repos/{owner}/{repo}/issues/{number}/comments",
+                    self.base_url
+                )),
+                token,
+            )
             .form(&[("body", body)])
             .send()
             .map_err(IssueError::Transport)?;
@@ -219,15 +240,23 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        if matches!(response.status().as_u16(), 400 | 401) {
-            return Err(IssueError::InvalidToken);
-        }
+        let status = response.status().as_u16();
 
-        if response.status().as_u16() == 404 {
+        if status == 404 {
             return Err(IssueError::NotFound);
         }
 
-        Err(IssueError::UnexpectedStatus(response.status().as_u16()))
+        let error_message = parse_api_error_message(response);
+
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
+            return Err(IssueError::InvalidToken);
+        }
+
+        if let Some(message) = error_message {
+            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
+        }
+
+        Err(IssueError::UnexpectedStatus(status))
     }
 
     pub fn create_issue(
@@ -237,7 +266,6 @@ impl GiteeClient {
         request: &CreateIssue<'_>,
     ) -> Result<IssueResponse, IssueError> {
         let mut form = vec![
-            ("access_token", token.to_string()),
             ("repo", request.repo.to_string()),
             ("title", request.title.to_string()),
         ];
@@ -247,8 +275,11 @@ impl GiteeClient {
         }
 
         let response = self
-            .client
-            .post(format!("{}/v5/repos/{owner}/issues", self.base_url))
+            .with_auth(
+                self.client
+                    .post(format!("{}/v5/repos/{owner}/issues", self.base_url)),
+                token,
+            )
             .form(&form)
             .send()
             .map_err(IssueError::Transport)?;
@@ -262,7 +293,7 @@ impl GiteeClient {
         let status = response.status().as_u16();
         let error_message = parse_api_error_message(response);
 
-        if status == 401 {
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
             return Err(IssueError::InvalidToken);
         }
 
@@ -299,12 +330,13 @@ impl GiteeClient {
         }
 
         let response = self
-            .client
-            .patch(format!(
-                "{}/v5/repos/{owner}/issues/{number}",
-                self.base_url
-            ))
-            .query(&[("access_token", token)])
+            .with_auth(
+                self.client.patch(format!(
+                    "{}/v5/repos/{owner}/issues/{number}",
+                    self.base_url
+                )),
+                token,
+            )
             .form(&form)
             .send()
             .map_err(IssueError::Transport)?;
@@ -318,7 +350,7 @@ impl GiteeClient {
         let status = response.status().as_u16();
         let error_message = parse_api_error_message(response);
 
-        if status == 401 {
+        if response_indicates_invalid_token(status, error_message.as_deref()) {
             return Err(IssueError::InvalidToken);
         }
 

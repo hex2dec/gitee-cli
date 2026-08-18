@@ -248,7 +248,7 @@ fn pr_view_resolves_human_name_remote_to_canonical_private_repo() {
     let direct_lookup_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/hzw/tip-ucan/pulls/42")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -257,7 +257,7 @@ fn pr_view_resolves_human_name_remote_to_canonical_private_repo() {
     let repo_list_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user/repos")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!([
             {
                 "full_name": "hzw-dev/tip-ucan",
@@ -274,7 +274,7 @@ fn pr_view_resolves_human_name_remote_to_canonical_private_repo() {
     let canonical_pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/hzw-dev/tip-ucan/pulls/42")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "number": 42,
             "state": "open",

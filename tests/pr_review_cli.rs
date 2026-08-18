@@ -14,14 +14,14 @@ fn pr_review_approves_from_local_repo_context_in_json_output() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/42")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(pull_request_payload(42));
     });
 
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(201);
     });
 
@@ -54,14 +54,14 @@ fn pr_review_posts_a_comment_in_json_output() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/43")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(pull_request_payload(43));
     });
 
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/43/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Looks+good");
         then.status(201).json_body(serde_json::json!({
             "id": 101,
@@ -117,14 +117,14 @@ fn pr_review_reads_comment_body_from_stdin_with_short_flags() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/44")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(pull_request_payload(44));
     });
 
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/44/comments")
-            .query_param("access_token", "secret-token")
+            .header("authorization", "Bearer secret-token")
             .body_contains("body=Generated+review%0A");
         then.status(201).json_body(serde_json::json!({
             "id": 102,
@@ -215,7 +215,7 @@ fn pr_review_resolves_human_name_remote_to_canonical_private_repo() {
     let direct_lookup_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/hzw/tip-ucan/pulls/46")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -224,7 +224,7 @@ fn pr_review_resolves_human_name_remote_to_canonical_private_repo() {
     let repo_list_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/user/repos")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!([
             {
                 "full_name": "hzw-dev/tip-ucan",
@@ -241,7 +241,7 @@ fn pr_review_resolves_human_name_remote_to_canonical_private_repo() {
     let canonical_pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/hzw-dev/tip-ucan/pulls/46")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200)
             .json_body(pull_request_payload_for(46, "hzw-dev/tip-ucan"));
     });
@@ -249,7 +249,7 @@ fn pr_review_resolves_human_name_remote_to_canonical_private_repo() {
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/hzw-dev/tip-ucan/pulls/46/review")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(201);
     });
 
@@ -302,7 +302,7 @@ fn pr_review_reports_a_missing_pull_request() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/404")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -311,7 +311,7 @@ fn pr_review_reports_a_missing_pull_request() {
     let repo_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(serde_json::json!({
             "full_name": "octo/demo",
             "path": "demo",
@@ -349,14 +349,14 @@ fn pr_review_surfaces_remote_validation_errors() {
     let pr_mock = server.mock(|when, then| {
         when.method(GET)
             .path("/v5/repos/octo/demo/pulls/47")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(200).json_body(pull_request_payload(47));
     });
 
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/47/review")
-            .query_param("access_token", "secret-token");
+            .header("authorization", "Bearer secret-token");
         then.status(400).json_body(serde_json::json!({
             "message": "pull request has already been reviewed"
         }));
