@@ -73,17 +73,6 @@ The npm package includes prebuilt binaries for:
 - Apple Silicon macOS: `aarch64-apple-darwin`
 - Linux x86_64: `x86_64-unknown-linux-musl`
 
-Commit builds from the `main` branch are published under the `canary` dist-tag:
-
-```bash
-npm install -g @pkg-ai/gitee-cli@canary
-```
-
-If you do not use npm, download the matching archive from the GitHub Releases
-page, extract it, and place `gitee` somewhere on your `PATH`.
-
-Each release also includes `gitee-<version>-checksums.txt`.
-
 ## Install the Bundled Skill in Coding Agents
 
 Install the bundled `using-gitee-cli` skill into `~/.agents/skills`:
@@ -93,7 +82,7 @@ gitee skills install
 ```
 
 Use `gitee skills list` to check whether the skill is installed, and
-`gitee skills uninstall` to remove it. All three commands support `--json`.
+`gitee skills uninstall` to remove it.
 
 ## Common Workflows
 

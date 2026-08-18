@@ -73,17 +73,6 @@ npm 包内置以下平台的预构建二进制：
 - Apple Silicon macOS：`aarch64-apple-darwin`
 - Linux x86_64：`x86_64-unknown-linux-musl`
 
-`main` 分支上的 commit 构建会发布到 `canary` dist-tag：
-
-```bash
-npm install -g @pkg-ai/gitee-cli@canary
-```
-
-如果你不使用 npm，也可以从 GitHub Releases 页面下载对应平台的压缩包，
-解压后将 `gitee` 放到你的 `PATH` 中即可。
-
-每个 release 还会额外提供 `gitee-<version>-checksums.txt`。
-
 ## 在 Coding Agent 中安装内置 Skill
 
 将内置的 `using-gitee-cli` skill 安装到 `~/.agents/skills`：
@@ -93,7 +82,6 @@ gitee skills install
 ```
 
 使用 `gitee skills list` 检查安装状态，使用 `gitee skills uninstall` 移除。
-这三个命令都支持 `--json`。
 
 ## 常见工作流
 
