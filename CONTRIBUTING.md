@@ -90,9 +90,7 @@ Pull requests and issues should be written in English. A good PR includes:
 - sample output when flags, JSON payloads, or exit codes changed
 
 If a user-facing documentation change affects both languages, update
-[README.md](./README.md) and [README_CN.md](./README_CN.md) together. Keep
-English and Chinese contribution guidance aligned in
-[CONTRIBUTING.md](./CONTRIBUTING.md) and [CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md).
+[README.md](./README.md) and [README_CN.md](./README_CN.md) together.
 
 ## Security and Configuration
 

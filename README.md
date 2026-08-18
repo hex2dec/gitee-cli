@@ -73,29 +73,6 @@ The npm package includes prebuilt binaries for:
 - Apple Silicon macOS: `aarch64-apple-darwin`
 - Linux x86_64: `x86_64-unknown-linux-musl`
 
-Commit builds from the `main` branch are published under the `canary` dist-tag:
-
-```bash
-npm install -g @pkg-ai/gitee-cli@canary
-```
-
-If you do not use npm, download the matching archive from the GitHub Releases
-page, extract it, and place `gitee` somewhere on your `PATH`.
-
-Each release also includes `gitee-<version>-checksums.txt`.
-
-## Build From Source
-
-If you need a local build or a platform outside the published release assets,
-build from source:
-
-```bash
-cargo build --release
-```
-
-For contributor setup, validation commands, and repository conventions, see
-[CONTRIBUTING.md](./CONTRIBUTING.md).
-
 ## Install the Bundled Skill in Coding Agents
 
 Install the bundled `using-gitee-cli` skill into `~/.agents/skills`:
@@ -105,7 +82,7 @@ gitee skills install
 ```
 
 Use `gitee skills list` to check whether the skill is installed, and
-`gitee skills uninstall` to remove it. All three commands support `--json`.
+`gitee skills uninstall` to remove it.
 
 ## Common Workflows
 
@@ -253,25 +230,6 @@ When `--repo` is omitted, `gitee-cli` tries to infer the repository from the
 local git checkout. That keeps common commands short when you are already in the
 right repository.
 
-Commands that can use local repository context include:
-
-- `repo view`
-- `issue list`
-- `issue view`
-- `issue edit`
-- `issue comment`
-- `pr view`
-- `pr list`
-- `pr comment`
-- `pr review`
-- `pr create`
-- `pr merge`
-- `pr checkout`
-- `pr status`
-
-`pr status` always requires a local git checkout. `pr checkout` also requires a
-local git checkout with an `origin` remote.
-
 <details>
 <summary>Supported <code>origin</code> URL forms</summary>
 
@@ -288,17 +246,6 @@ Most read operations can work without a saved token when the target repository
 is public. Authentication is required for write operations and for some
 user-specific flows. Private repositories and some human-name fallback lookups
 may still require authentication.
-
-Commands that require authentication:
-
-- `auth login`
-- `issue edit`
-- `issue comment`
-- `pr comment`
-- `pr review`
-- `pr create`
-- `pr merge`
-- `pr status`
 
 Runtime token resolution order:
 

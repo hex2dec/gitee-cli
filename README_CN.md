@@ -73,28 +73,6 @@ npm 包内置以下平台的预构建二进制：
 - Apple Silicon macOS：`aarch64-apple-darwin`
 - Linux x86_64：`x86_64-unknown-linux-musl`
 
-`main` 分支上的 commit 构建会发布到 `canary` dist-tag：
-
-```bash
-npm install -g @pkg-ai/gitee-cli@canary
-```
-
-如果你不使用 npm，也可以从 GitHub Releases 页面下载对应平台的压缩包，
-解压后将 `gitee` 放到你的 `PATH` 中即可。
-
-每个 release 还会额外提供 `gitee-<version>-checksums.txt`。
-
-## 从源码构建
-
-如果你需要本地构建版本，或者目标平台不在当前发布资产范围内，可以从源码构建：
-
-```bash
-cargo build --release
-```
-
-贡献者环境准备、验证命令和仓库约定请见
-[CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md)。
-
 ## 在 Coding Agent 中安装内置 Skill
 
 将内置的 `using-gitee-cli` skill 安装到 `~/.agents/skills`：
@@ -104,7 +82,6 @@ gitee skills install
 ```
 
 使用 `gitee skills list` 检查安装状态，使用 `gitee skills uninstall` 移除。
-这三个命令都支持 `--json`。
 
 ## 常见工作流
 
@@ -251,25 +228,6 @@ gitee pr checkout 42 --repo octo/demo --json
 当省略 `--repo` 时，`gitee-cli` 会尝试从当前本地 git checkout 中推断目标
 仓库。这会让你在正确仓库目录里执行常见命令时更简洁。
 
-支持使用本地仓库上下文的命令包括：
-
-- `repo view`
-- `issue list`
-- `issue view`
-- `issue edit`
-- `issue comment`
-- `pr view`
-- `pr list`
-- `pr comment`
-- `pr review`
-- `pr create`
-- `pr merge`
-- `pr checkout`
-- `pr status`
-
-`pr status` 总是要求当前目录是一个本地 git checkout。`pr checkout` 还要
-求该仓库存在 `origin` 远程。
-
 <details>
 <summary>支持的 <code>origin</code> URL 形式</summary>
 
@@ -285,17 +243,6 @@ gitee pr checkout 42 --repo octo/demo --json
 对于公开仓库，多数只读操作在没有保存 token 的情况下也可以工作。写操作
 和部分与用户身份相关的流程要求认证。私有仓库，以及某些基于 human-name
 回退解析的场景，也可能要求认证。
-
-需要认证的命令包括：
-
-- `auth login`
-- `issue edit`
-- `issue comment`
-- `pr comment`
-- `pr review`
-- `pr create`
-- `pr merge`
-- `pr status`
 
 运行时 token 的解析优先级：
 
@@ -345,7 +292,7 @@ gitee pr checkout 42 --repo octo/demo --json
 ## 参与贡献
 
 本地开发、测试和 Pull Request 约定请见
-[CONTRIBUTING_CN.md](./CONTRIBUTING_CN.md)。
+[CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ## 许可证
 
