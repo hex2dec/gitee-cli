@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "description": "macOS arm64 binary for @pkg-in/gitee-cli",
   "license": "MIT",
-  "homepage": "https://github.com/hex2dec/gitee-cli",
+  "homepage": "https://github.com/pkg-ai/gitee-cli",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hex2dec/gitee-cli.git"
+    "url": "git+https://github.com/pkg-ai/gitee-cli.git"
   },
   "os": [
     "darwin"
