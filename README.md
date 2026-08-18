@@ -230,25 +230,6 @@ When `--repo` is omitted, `gitee-cli` tries to infer the repository from the
 local git checkout. That keeps common commands short when you are already in the
 right repository.
 
-Commands that can use local repository context include:
-
-- `repo view`
-- `issue list`
-- `issue view`
-- `issue edit`
-- `issue comment`
-- `pr view`
-- `pr list`
-- `pr comment`
-- `pr review`
-- `pr create`
-- `pr merge`
-- `pr checkout`
-- `pr status`
-
-`pr status` always requires a local git checkout. `pr checkout` also requires a
-local git checkout with an `origin` remote.
-
 <details>
 <summary>Supported <code>origin</code> URL forms</summary>
 
@@ -265,17 +246,6 @@ Most read operations can work without a saved token when the target repository
 is public. Authentication is required for write operations and for some
 user-specific flows. Private repositories and some human-name fallback lookups
 may still require authentication.
-
-Commands that require authentication:
-
-- `auth login`
-- `issue edit`
-- `issue comment`
-- `pr comment`
-- `pr review`
-- `pr create`
-- `pr merge`
-- `pr status`
 
 Runtime token resolution order:
 
