@@ -59,16 +59,19 @@ fn list_repository_issues_sends_filters_and_parses_results() {
 }
 
 #[test]
-fn create_issue_sends_form_body_and_parses_response() {
+fn create_issue_sends_json_body_and_parses_response() {
     let server = MockServer::start();
     let create_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
             .matches(excludes_access_token)
-            .body_contains("repo=demo")
-            .body_contains("title=Add+crate+tests")
-            .body_contains("body=Public+API+coverage");
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Add crate tests",
+                "body": "Public API coverage"
+            }));
         then.status(201).json_body(serde_json::json!({
             "number": "I124",
             "title": "Add crate tests",
@@ -99,6 +102,38 @@ fn create_issue_sends_form_body_and_parses_response() {
     assert_eq!(issue.number, "I124");
     assert_eq!(issue.body.as_deref(), Some("Public API coverage"));
     create_mock.assert_hits(1);
+}
+
+#[test]
+fn create_issue_comment_sends_json_body_and_parses_response() {
+    let server = MockServer::start();
+    let comment_mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v5/repos/octo/demo/issues/I124/comments")
+            .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
+            .matches(excludes_access_token)
+            .json_body(serde_json::json!({
+                "body": "Looks good"
+            }));
+        then.status(201).json_body(serde_json::json!({
+            "id": 7,
+            "body": "Looks good",
+            "created_at": "2026-03-20T14:30:00Z",
+            "updated_at": "2026-03-20T14:30:00Z",
+            "user": {
+                "login": "reviewer"
+            }
+        }));
+    });
+
+    let comment = client_for(&server)
+        .create_issue_comment("octo", "demo", "I124", "secret-token", "Looks good")
+        .expect("created issue comment should parse");
+
+    assert_eq!(comment.id, 7);
+    assert_eq!(comment.body.as_deref(), Some("Looks good"));
+    comment_mock.assert_hits(1);
 }
 
 #[test]
@@ -140,11 +175,14 @@ fn update_issue_sends_patch_fields_and_parses_response() {
         when.method(PATCH)
             .path("/v5/repos/octo/issues/I125")
             .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
             .matches(excludes_access_token)
-            .body_contains("repo=demo")
-            .body_contains("title=Updated+issue")
-            .body_contains("body=Updated+body")
-            .body_contains("state=closed");
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Updated issue",
+                "body": "Updated body",
+                "state": "closed"
+            }));
         then.status(200).json_body(serde_json::json!({
             "number": "I125",
             "title": "Updated issue",

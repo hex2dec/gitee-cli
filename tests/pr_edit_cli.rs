@@ -14,8 +14,10 @@ fn pr_edit_updates_title_with_explicit_repo_in_json_output() {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/42")
             .header("authorization", "Bearer secret-token")
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body_contains("title=Updated+title");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "title": "Updated title"
+            }));
         then.status(200).json_body(pull_request_payload(
             42,
             "Updated title",
@@ -68,7 +70,10 @@ fn pr_edit_resolves_human_name_remote_to_canonical_private_repo() {
         when.method(PATCH)
             .path("/v5/repos/hzw/tip-ucan/pulls/42")
             .header("authorization", "Bearer secret-token")
-            .body_contains("title=Canonical+title");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "title": "Canonical title"
+            }));
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -95,7 +100,10 @@ fn pr_edit_resolves_human_name_remote_to_canonical_private_repo() {
         when.method(PATCH)
             .path("/v5/repos/hzw-dev/tip-ucan/pulls/42")
             .header("authorization", "Bearer secret-token")
-            .body_contains("title=Canonical+title");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "title": "Canonical title"
+            }));
         then.status(200).json_body(serde_json::json!({
             "number": 42,
             "state": "open",
@@ -158,8 +166,11 @@ fn pr_edit_reads_body_from_stdin_marks_ready_and_renders_text_output() {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/44")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Generated+from+stdin%0A")
-            .body_contains("draft=false");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Generated from stdin\n",
+                "draft": false
+            }));
         then.status(200).json_body(pull_request_payload(
             44,
             "Ready for review",
@@ -208,7 +219,10 @@ fn pr_edit_allows_clearing_body_with_an_explicit_empty_string() {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/45")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": ""
+            }));
         then.status(200).json_body(pull_request_payload(
             45,
             "Empty body",
@@ -255,7 +269,10 @@ fn pr_edit_updates_state_to_closed() {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/46")
             .header("authorization", "Bearer secret-token")
-            .body_contains("state=closed");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "state": "closed"
+            }));
         then.status(200).json_body(serde_json::json!({
             "number": 46,
             "state": "closed",

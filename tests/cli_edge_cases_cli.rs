@@ -100,7 +100,10 @@ fn issue_comment_accepts_a_hyphen_prefixed_body_value() {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=--token%3Dabc");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "--token=abc"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 321,
             "body": "--token=abc",

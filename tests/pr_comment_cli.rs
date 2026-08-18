@@ -23,7 +23,10 @@ fn pr_comment_posts_a_general_comment_from_local_repo_context_in_json_output() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Ship+it");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Ship it"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 101,
             "body": "Ship it",
@@ -80,7 +83,10 @@ fn pr_comment_reads_body_from_a_file_and_renders_text_output() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/43/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Looks+good+to+me");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Looks good to me"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 102,
             "body": "Looks good to me",
@@ -142,7 +148,10 @@ fn pr_comment_reads_body_from_stdin_via_body_file_dash() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/44/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Generated+from+stdin%0A");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Generated from stdin\n"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 103,
             "body": "Generated from stdin\n",

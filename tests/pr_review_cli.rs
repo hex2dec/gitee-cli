@@ -21,7 +21,9 @@ fn pr_review_approves_from_local_repo_context_in_json_output() {
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
-            .header("authorization", "Bearer secret-token");
+            .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({}));
         then.status(201);
     });
 
@@ -62,7 +64,10 @@ fn pr_review_posts_a_comment_in_json_output() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/43/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Looks+good");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Looks good"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 101,
             "body": "Looks good",
@@ -125,7 +130,10 @@ fn pr_review_reads_comment_body_from_stdin_with_short_flags() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/44/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Generated+review%0A");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Generated review\n"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 102,
             "body": "Generated review\n",
@@ -249,7 +257,9 @@ fn pr_review_resolves_human_name_remote_to_canonical_private_repo() {
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/hzw-dev/tip-ucan/pulls/46/review")
-            .header("authorization", "Bearer secret-token");
+            .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({}));
         then.status(201);
     });
 
@@ -356,7 +366,9 @@ fn pr_review_surfaces_remote_validation_errors() {
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/47/review")
-            .header("authorization", "Bearer secret-token");
+            .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({}));
         then.status(400).json_body(serde_json::json!({
             "message": "pull request has already been reviewed"
         }));

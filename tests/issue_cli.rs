@@ -214,9 +214,12 @@ fn issue_create_uses_local_repo_context_and_reports_stable_json_output() {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("title=Add+issue+create")
-            .body_contains("body=Creates+an+issue+from+the+CLI");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Add issue create",
+                "body": "Creates an issue from the CLI"
+            }));
         then.status(201).json_body(serde_json::json!({
             "number": "I124",
             "title": "Add issue create",
@@ -302,9 +305,12 @@ fn issue_create_uses_explicit_repo_and_renders_text_output() {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("title=Use+explicit+repo")
-            .body_contains("body=Created+with+an+explicit+repo");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Use explicit repo",
+                "body": "Created with an explicit repo"
+            }));
         then.status(201).json_body(serde_json::json!({
             "number": "I125",
             "title": "Use explicit repo",
@@ -365,9 +371,12 @@ fn issue_create_reads_body_from_a_file() {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("title=Read+issue+body+file")
-            .body_contains("body=Generated+from+a+file");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Read issue body file",
+                "body": "Generated from a file"
+            }));
         then.status(201).json_body(serde_json::json!({
             "number": "I126",
             "title": "Read issue body file",
@@ -419,9 +428,12 @@ fn issue_create_reads_body_from_stdin_via_body_file_dash() {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("title=Read+issue+stdin")
-            .body_contains("body=Generated+from+stdin%0A");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Read issue stdin",
+                "body": "Generated from stdin\n"
+            }));
         then.status(201).json_body(serde_json::json!({
             "number": "I127",
             "title": "Read issue stdin",
@@ -474,8 +486,11 @@ fn issue_create_surfaces_remote_validation_errors_instead_of_auth_failure() {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("title=Bad");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Bad"
+            }));
         then.status(400).json_body(serde_json::json!({
             "message": "title is too short"
         }));
@@ -534,8 +549,11 @@ fn issue_create_fails_when_authentication_is_rejected() {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer bad-token")
-            .body_contains("repo=demo")
-            .body_contains("title=Needs+auth");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Needs auth"
+            }));
         then.status(401).json_body(serde_json::json!({
             "message": "Unauthorized"
         }));
@@ -574,8 +592,11 @@ fn issue_create_fails_when_repository_is_missing() {
         when.method(POST)
             .path("/v5/repos/octo/issues")
             .header("authorization", "Bearer secret-token")
-            .body_contains("repo=demo")
-            .body_contains("title=Missing+repo");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "repo": "demo",
+                "title": "Missing repo"
+            }));
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -691,7 +712,10 @@ fn issue_comment_posts_a_reply_from_a_direct_body_flag() {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Thanks+for+the+detailed+report");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Thanks for the detailed report"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 99,
             "body": "Thanks for the detailed report",
@@ -748,7 +772,10 @@ fn issue_comment_supports_body_file_input_and_stable_text_output() {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Posted+from+file");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Posted from file"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 100,
             "body": "Posted from file",
@@ -802,7 +829,10 @@ fn issue_comment_supports_stdin_body_input_via_body_file_dash() {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Posted+from+stdin");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Posted from stdin"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 101,
             "body": "Posted from stdin",
@@ -852,7 +882,10 @@ fn issue_comment_fails_when_issue_is_missing() {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I404/comments")
             .header("authorization", "Bearer secret-token")
-            .body_contains("body=Missing+issue+comment");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Missing issue comment"
+            }));
         then.status(404).json_body(serde_json::json!({
             "message": "Not Found"
         }));
@@ -892,7 +925,10 @@ fn issue_comment_fails_when_authentication_is_rejected() {
         when.method(POST)
             .path("/v5/repos/octo/demo/issues/I123/comments")
             .header("authorization", "Bearer bad-token")
-            .body_contains("body=Needs+auth");
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "body": "Needs auth"
+            }));
         then.status(401).json_body(serde_json::json!({
             "message": "Unauthorized"
         }));

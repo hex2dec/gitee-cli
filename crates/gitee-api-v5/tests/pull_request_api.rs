@@ -120,17 +120,20 @@ fn create_pull_request_sends_json_body_and_parses_response() {
 }
 
 #[test]
-fn update_pull_request_sends_form_fields_and_parses_response() {
+fn update_pull_request_sends_json_body_and_parses_response() {
     let server = MockServer::start();
     let update_mock = server.mock(|when, then| {
         when.method(PATCH)
             .path("/v5/repos/octo/demo/pulls/42")
             .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
             .matches(excludes_access_token)
-            .body_contains("title=Updated+title")
-            .body_contains("body=Updated+body")
-            .body_contains("state=closed")
-            .body_contains("draft=true");
+            .json_body(serde_json::json!({
+                "title": "Updated title",
+                "body": "Updated body",
+                "state": "closed",
+                "draft": true
+            }));
         then.status(200).json_body(pull_request_payload(42));
     });
 
@@ -154,14 +157,17 @@ fn update_pull_request_sends_form_fields_and_parses_response() {
 }
 
 #[test]
-fn create_pull_request_comment_sends_auth_header_and_form_body() {
+fn create_pull_request_comment_sends_json_body() {
     let server = MockServer::start();
     let comment_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/comments")
             .header("authorization", "Bearer secret-token")
+            .header("content-type", "application/json")
             .matches(excludes_access_token)
-            .body_contains("body=Looks+good");
+            .json_body(serde_json::json!({
+                "body": "Looks good"
+            }));
         then.status(201).json_body(serde_json::json!({
             "id": 7,
             "body": "Looks good",
@@ -196,7 +202,9 @@ fn approve_pull_request_maps_invalid_token_response() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
             .header("authorization", "Bearer bad-token")
-            .matches(excludes_access_token);
+            .header("content-type", "application/json")
+            .matches(excludes_access_token)
+            .json_body(serde_json::json!({}));
         then.status(400).json_body(serde_json::json!({
             "message": "401 Unauthorized"
         }));
@@ -209,13 +217,15 @@ fn approve_pull_request_maps_invalid_token_response() {
 }
 
 #[test]
-fn approve_pull_request_sends_token_to_review_endpoint() {
+fn approve_pull_request_sends_json_body_to_review_endpoint() {
     let server = MockServer::start();
     let review_mock = server.mock(|when, then| {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
             .header("authorization", "Bearer secret-token")
-            .matches(excludes_access_token);
+            .header("content-type", "application/json")
+            .matches(excludes_access_token)
+            .json_body(serde_json::json!({}));
         then.status(201);
     });
 
@@ -233,7 +243,9 @@ fn approve_pull_request_preserves_non_auth_validation_errors() {
         when.method(POST)
             .path("/v5/repos/octo/demo/pulls/42/review")
             .header("authorization", "Bearer secret-token")
-            .matches(excludes_access_token);
+            .header("content-type", "application/json")
+            .matches(excludes_access_token)
+            .json_body(serde_json::json!({}));
         then.status(400).json_body(serde_json::json!({
             "message": "pull request has already been reviewed"
         }));
