@@ -1,6 +1,6 @@
 use crate::client::GiteeClient;
 use crate::repo::RepoError;
-use crate::utils::{parse_api_error_message, response_indicates_invalid_token};
+use crate::utils::ApiResponseError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -10,6 +10,24 @@ pub enum PullRequestError {
     Transport(reqwest::Error),
     UnexpectedStatus(u16),
     UnexpectedStatusWithMessage(u16, String),
+}
+
+impl ApiResponseError for PullRequestError {
+    fn invalid_token() -> Self {
+        Self::InvalidToken
+    }
+
+    fn not_found() -> Self {
+        Self::NotFound
+    }
+
+    fn unexpected_status(status: u16) -> Self {
+        Self::UnexpectedStatus(status)
+    }
+
+    fn unexpected_status_with_message(status: u16, message: String) -> Self {
+        Self::UnexpectedStatusWithMessage(status, message)
+    }
 }
 
 pub struct CreatePullRequestComment<'a> {
@@ -144,25 +162,9 @@ impl GiteeClient {
                 .map_err(PullRequestError::Transport);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(PullRequestError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(PullRequestError::InvalidToken);
-        }
-
-        if let Some(message) = error_message {
-            return Err(PullRequestError::UnexpectedStatusWithMessage(
-                status, message,
-            ));
-        }
-
-        Err(PullRequestError::UnexpectedStatus(status))
+        Err(PullRequestError::from_response_with_not_found_first(
+            response,
+        ))
     }
 
     pub fn fetch_pull_requests(
@@ -211,19 +213,7 @@ impl GiteeClient {
                 .map_err(RepoError::Transport);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(RepoError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(RepoError::InvalidToken);
-        }
-
-        Err(RepoError::UnexpectedStatus(status))
+        Err(RepoError::from_response_with_not_found_first(response))
     }
 
     pub fn create_pull_request_comment(
@@ -252,25 +242,9 @@ impl GiteeClient {
                 .map_err(PullRequestError::Transport);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(PullRequestError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(PullRequestError::InvalidToken);
-        }
-
-        if let Some(message) = error_message {
-            return Err(PullRequestError::UnexpectedStatusWithMessage(
-                status, message,
-            ));
-        }
-
-        Err(PullRequestError::UnexpectedStatus(status))
+        Err(PullRequestError::from_response_with_not_found_first(
+            response,
+        ))
     }
 
     pub fn approve_pull_request(
@@ -295,24 +269,7 @@ impl GiteeClient {
             return Ok(());
         }
 
-        let status = response.status().as_u16();
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(PullRequestError::InvalidToken);
-        }
-
-        if status == 404 {
-            return Err(PullRequestError::NotFound);
-        }
-
-        if let Some(message) = error_message {
-            return Err(PullRequestError::UnexpectedStatusWithMessage(
-                status, message,
-            ));
-        }
-
-        Err(PullRequestError::UnexpectedStatus(status))
+        Err(PullRequestError::from_response_with_token_first(response))
     }
 
     pub fn create_pull_request(
@@ -343,24 +300,7 @@ impl GiteeClient {
                 .map_err(PullRequestError::Transport);
         }
 
-        let status = response.status().as_u16();
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(PullRequestError::InvalidToken);
-        }
-
-        if status == 404 {
-            return Err(PullRequestError::NotFound);
-        }
-
-        if let Some(message) = error_message {
-            return Err(PullRequestError::UnexpectedStatusWithMessage(
-                status, message,
-            ));
-        }
-
-        Err(PullRequestError::UnexpectedStatus(status))
+        Err(PullRequestError::from_response_with_token_first(response))
     }
 
     pub fn update_pull_request(
@@ -407,24 +347,7 @@ impl GiteeClient {
                 .map_err(PullRequestError::Transport);
         }
 
-        let status = response.status().as_u16();
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(PullRequestError::InvalidToken);
-        }
-
-        if status == 404 {
-            return Err(PullRequestError::NotFound);
-        }
-
-        if let Some(message) = error_message {
-            return Err(PullRequestError::UnexpectedStatusWithMessage(
-                status, message,
-            ));
-        }
-
-        Err(PullRequestError::UnexpectedStatus(status))
+        Err(PullRequestError::from_response_with_token_first(response))
     }
 
     pub fn merge_pull_request(
@@ -455,23 +378,6 @@ impl GiteeClient {
                 .map_err(PullRequestError::Transport);
         }
 
-        let status = response.status().as_u16();
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(PullRequestError::InvalidToken);
-        }
-
-        if status == 404 {
-            return Err(PullRequestError::NotFound);
-        }
-
-        if let Some(message) = error_message {
-            return Err(PullRequestError::UnexpectedStatusWithMessage(
-                status, message,
-            ));
-        }
-
-        Err(PullRequestError::UnexpectedStatus(status))
+        Err(PullRequestError::from_response_with_token_first(response))
     }
 }

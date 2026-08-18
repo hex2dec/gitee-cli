@@ -1,5 +1,5 @@
 use crate::client::GiteeClient;
-use crate::utils::{parse_api_error_message, response_indicates_invalid_token};
+use crate::utils::ApiResponseError;
 use serde::Deserialize;
 
 #[derive(Debug)]
@@ -9,6 +9,24 @@ pub enum IssueError {
     Transport(reqwest::Error),
     UnexpectedStatus(u16),
     UnexpectedStatusWithMessage(u16, String),
+}
+
+impl ApiResponseError for IssueError {
+    fn invalid_token() -> Self {
+        Self::InvalidToken
+    }
+
+    fn not_found() -> Self {
+        Self::NotFound
+    }
+
+    fn unexpected_status(status: u16) -> Self {
+        Self::UnexpectedStatus(status)
+    }
+
+    fn unexpected_status_with_message(status: u16, message: String) -> Self {
+        Self::UnexpectedStatusWithMessage(status, message)
+    }
 }
 
 pub struct CreateIssue<'a> {
@@ -102,23 +120,7 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(IssueError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(IssueError::InvalidToken);
-        }
-
-        if let Some(message) = error_message {
-            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
-        }
-
-        Err(IssueError::UnexpectedStatus(status))
+        Err(IssueError::from_response_with_not_found_first(response))
     }
 
     pub fn fetch_issue(
@@ -144,23 +146,7 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(IssueError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(IssueError::InvalidToken);
-        }
-
-        if let Some(message) = error_message {
-            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
-        }
-
-        Err(IssueError::UnexpectedStatus(status))
+        Err(IssueError::from_response_with_not_found_first(response))
     }
 
     pub fn list_issue_comments(
@@ -195,23 +181,7 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(IssueError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(IssueError::InvalidToken);
-        }
-
-        if let Some(message) = error_message {
-            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
-        }
-
-        Err(IssueError::UnexpectedStatus(status))
+        Err(IssueError::from_response_with_not_found_first(response))
     }
 
     pub fn create_issue_comment(
@@ -240,23 +210,7 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        let status = response.status().as_u16();
-
-        if status == 404 {
-            return Err(IssueError::NotFound);
-        }
-
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(IssueError::InvalidToken);
-        }
-
-        if let Some(message) = error_message {
-            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
-        }
-
-        Err(IssueError::UnexpectedStatus(status))
+        Err(IssueError::from_response_with_not_found_first(response))
     }
 
     pub fn create_issue(
@@ -290,22 +244,7 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        let status = response.status().as_u16();
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(IssueError::InvalidToken);
-        }
-
-        if status == 404 {
-            return Err(IssueError::NotFound);
-        }
-
-        if let Some(message) = error_message {
-            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
-        }
-
-        Err(IssueError::UnexpectedStatus(status))
+        Err(IssueError::from_response_with_token_first(response))
     }
 
     pub fn update_issue(
@@ -347,21 +286,6 @@ impl GiteeClient {
                 .map_err(IssueError::Transport);
         }
 
-        let status = response.status().as_u16();
-        let error_message = parse_api_error_message(response);
-
-        if response_indicates_invalid_token(status, error_message.as_deref()) {
-            return Err(IssueError::InvalidToken);
-        }
-
-        if status == 404 {
-            return Err(IssueError::NotFound);
-        }
-
-        if let Some(message) = error_message {
-            return Err(IssueError::UnexpectedStatusWithMessage(status, message));
-        }
-
-        Err(IssueError::UnexpectedStatus(status))
+        Err(IssueError::from_response_with_token_first(response))
     }
 }
