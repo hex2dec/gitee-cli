@@ -75,14 +75,24 @@ The npm package includes prebuilt binaries for:
 
 ## Install the Bundled Skill in Coding Agents
 
-Install the bundled `using-gitee-cli` skill into `~/.agents/skills`:
+Install the bundled `using-gitee-cli` skill. By default it is installed into
+`~/.agents/skills`, the cross-client Agent Skills standard directory:
 
 ```bash
 gitee skills install
 ```
 
-Use `gitee skills list` to check whether the skill is installed, and
-`gitee skills uninstall` to remove it.
+To install it into Claude Code's personal skill directory instead, pass
+`--agent claude-code`:
+
+```bash
+gitee skills install --agent claude-code
+```
+
+Use `gitee skills list` to check the installation status of every target, and
+`gitee skills uninstall` (optionally with `--agent claude-code`) to remove a
+specific target. Only `claude-code` is a supported `--agent` value; omit the
+flag for the default cross-client target.
 
 ## Common Workflows
 

@@ -75,13 +75,22 @@ npm 包内置以下平台的预构建二进制：
 
 ## 在 Coding Agent 中安装内置 Skill
 
-将内置的 `using-gitee-cli` skill 安装到 `~/.agents/skills`：
+安装内置的 `using-gitee-cli` skill。默认安装到 `~/.agents/skills`，
+即跨客户端的 Agent Skills 标准目录：
 
 ```bash
 gitee skills install
 ```
 
-使用 `gitee skills list` 检查安装状态，使用 `gitee skills uninstall` 移除。
+如需安装到 Claude Code 的个人 skill 目录，请传入 `--agent claude-code`：
+
+```bash
+gitee skills install --agent claude-code
+```
+
+使用 `gitee skills list` 查看每个目标的安装状态，使用
+`gitee skills uninstall`（可配合 `--agent claude-code`）移除指定目标。
+`--agent` 仅支持 `claude-code`；省略该 flag 即使用默认的跨客户端目标。
 
 ## 常见工作流
 
