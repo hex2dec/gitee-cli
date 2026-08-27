@@ -40,7 +40,6 @@ Do not assume every `gh` command exists. Confirm support with `gitee help` or
 - Prefer the current local checkout as repo context when available.
 - Add explicit `--repo owner/repo` only when working outside a local checkout or when reproducibility matters.
 - Prefer non-interactive write flows using flags, files, or stdin.
-- For non-trivial issue or pull-request bodies, write Markdown to a file and pass `--body-file <PATH>` before using inline `--body <TEXT>`; this preserves line breaks, lists, and code fences through shell quoting.
 - If a command fails, rerun `gitee help <topic>` before inventing flags or switching to raw HTTP.
 
 ## Command reference
