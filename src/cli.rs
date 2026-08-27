@@ -15,7 +15,7 @@ use crate::pr::{
     PrTextSource, PrViewRequest,
 };
 use crate::repo::{CloneTransport, RepoCloneRequest, RepoService, RepoViewRequest};
-use crate::skills::SkillsService;
+use crate::skills::{AgentKind, SkillsService};
 
 enum ParseOutcome<T> {
     Value(T),
@@ -219,15 +219,15 @@ fn run_skills(args: &[String]) -> Result<CommandOutcome, CommandError> {
 
     match subcommand.as_str() {
         "install" => execute_parsed(
-            parse_output_only(rest, skills_install_command()),
-            |output| SkillsService::from_env()?.install(output),
+            parse_skills_mutation_args(rest, "skills install", skills_install_command()),
+            |(agent, output)| SkillsService::from_env()?.install(agent, output),
         ),
         "uninstall" | "remove" => execute_parsed(
-            parse_output_only(rest, skills_uninstall_command()),
-            |output| SkillsService::from_env()?.uninstall(output),
+            parse_skills_mutation_args(rest, "skills uninstall", skills_uninstall_command()),
+            |(agent, output)| SkillsService::from_env()?.uninstall(agent, output),
         ),
-        "list" | "ls" => execute_parsed(parse_output_only(rest, skills_list_command()), |output| {
-            Ok(SkillsService::from_env()?.list(output))
+        "list" | "ls" => execute_parsed(parse_skills_list_args(rest), |(agent, output)| {
+            Ok(SkillsService::from_env()?.list(agent, output))
         }),
         _ => Err(CommandError::usage("unsupported command")),
     }
@@ -392,6 +392,36 @@ fn parse_output_only(
         let output = output_format(&matches);
         validate_json_field_selection(&output, &command_name, &[])?;
         Ok(output)
+    })
+}
+
+fn parse_skills_mutation_args(
+    args: &[String],
+    command_name: &str,
+    command: Command,
+) -> Result<ParseOutcome<(AgentKind, OutputFormat)>, CommandError> {
+    map_parsed(parse_matches(command, args), |matches| {
+        let output = output_format(&matches);
+        validate_json_field_selection(&output, command_name, &[])?;
+        let agent = match last_value(&matches, "agent") {
+            Some(value) => AgentKind::parse(&value)?,
+            None => AgentKind::Default,
+        };
+        Ok((agent, output))
+    })
+}
+
+fn parse_skills_list_args(
+    args: &[String],
+) -> Result<ParseOutcome<(Option<AgentKind>, OutputFormat)>, CommandError> {
+    map_parsed(parse_matches(skills_list_command(), args), |matches| {
+        let output = output_format(&matches);
+        validate_json_field_selection(&output, "skills list", &[])?;
+        let agent = match last_value(&matches, "agent") {
+            Some(value) => Some(AgentKind::parse(&value)?),
+            None => None,
+        };
+        Ok((agent, output))
     })
 }
 
@@ -1352,19 +1382,22 @@ fn auth_logout_command() -> Command {
 
 fn skills_install_command() -> Command {
     output_only_command("install", "gitee skills install")
-        .about("Install the bundled using-gitee-cli skill into ~/.agents/skills")
+        .about("Install the bundled using-gitee-cli skill into a coding agent's skills directory")
+        .arg(agent_option())
 }
 
 fn skills_uninstall_command() -> Command {
     output_only_command("uninstall", "gitee skills uninstall")
         .visible_alias("remove")
-        .about("Remove the bundled using-gitee-cli skill from ~/.agents/skills")
+        .about("Remove the bundled using-gitee-cli skill from a coding agent's skills directory")
+        .arg(agent_option())
 }
 
 fn skills_list_command() -> Command {
     output_only_command("list", "gitee skills list")
         .visible_alias("ls")
-        .about("List the bundled using-gitee-cli skill installation status")
+        .about("List the bundled using-gitee-cli skill installation status per target")
+        .arg(agent_option())
 }
 
 fn issue_list_command() -> Command {
@@ -1831,6 +1864,15 @@ fn repo_option() -> Arg {
         "repo",
         "REPO",
         "Target repository as OWNER/REPO; defaults to local git context when supported",
+    )
+}
+
+fn agent_option() -> Arg {
+    string_option(
+        "agent",
+        "agent",
+        "AGENT",
+        "Install target: claude-code (omit the flag for the default cross-client target)",
     )
 }
 
@@ -2693,24 +2735,32 @@ fn skills_install_help_json() -> serde_json::Value {
     help_command_json(
         "install",
         "skills install",
-        "Install the bundled using-gitee-cli skill into ~/.agents/skills",
+        "Install the bundled using-gitee-cli skill into a coding agent's skills directory",
         "not_applicable",
         true,
         "not_required",
         false,
         false,
         false,
-        vec![help_option_json(
-            "--json",
-            None,
-            "Output machine-readable JSON",
-            false,
-        )],
-        Vec::new(),
-        Vec::new(),
-        vec!["gitee skills install", "gitee skills install --json"],
         vec![
-            "Installs to ~/.agents/skills/using-gitee-cli.",
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            help_option_json(
+                "--agent",
+                Some("AGENT"),
+                "Install target: claude-code (omit for the default cross-client target)",
+                false,
+            ),
+        ],
+        Vec::new(),
+        Vec::new(),
+        vec![
+            "gitee skills install",
+            "gitee skills install --agent claude-code --json",
+        ],
+        vec![
+            "Omit --agent to install to ~/.agents/skills/using-gitee-cli.",
+            "Pass --agent claude-code to install to ~/.claude/skills/using-gitee-cli.",
+            "Only claude-code is a valid --agent value; claude is rejected.",
             "Existing using-gitee-cli installations are overwritten.",
         ],
     )
@@ -2720,24 +2770,32 @@ fn skills_uninstall_help_json() -> serde_json::Value {
     help_command_json(
         "uninstall",
         "skills uninstall",
-        "Remove the bundled using-gitee-cli skill from ~/.agents/skills",
+        "Remove the bundled using-gitee-cli skill from a coding agent's skills directory",
         "not_applicable",
         true,
         "not_required",
         false,
         false,
         false,
-        vec![help_option_json(
-            "--json",
-            None,
-            "Output machine-readable JSON",
-            false,
-        )],
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            help_option_json(
+                "--agent",
+                Some("AGENT"),
+                "Install target: claude-code (omit for the default cross-client target)",
+                false,
+            ),
+        ],
         Vec::new(),
         Vec::new(),
-        vec!["gitee skills uninstall", "gitee skills remove --json"],
+        vec![
+            "gitee skills uninstall",
+            "gitee skills uninstall --agent claude-code --json",
+        ],
         vec![
             "Alias: remove.",
+            "Omit --agent to remove ~/.agents/skills/using-gitee-cli; pass --agent claude-code to remove ~/.claude/skills/using-gitee-cli.",
+            "Only the selected target's directory is removed.",
             "Missing installations are treated as a successful no-op.",
         ],
     )
@@ -2747,24 +2805,31 @@ fn skills_list_help_json() -> serde_json::Value {
     help_command_json(
         "list",
         "skills list",
-        "List the bundled using-gitee-cli skill installation status",
+        "List the bundled using-gitee-cli skill installation status per target",
         "not_applicable",
         true,
         "not_required",
         false,
         false,
         false,
-        vec![help_option_json(
-            "--json",
-            None,
-            "Output machine-readable JSON",
-            false,
-        )],
+        vec![
+            help_option_json("--json", None, "Output machine-readable JSON", false),
+            help_option_json(
+                "--agent",
+                Some("AGENT"),
+                "Install target: claude-code (omit to show all targets)",
+                false,
+            ),
+        ],
         Vec::new(),
         Vec::new(),
-        vec!["gitee skills list", "gitee skills ls --json"],
+        vec![
+            "gitee skills list",
+            "gitee skills list --agent claude-code --json",
+        ],
         vec![
             "Alias: ls.",
+            "Omit --agent to show a row per target (default + claude-code); pass --agent claude-code to filter to one row.",
             "Only reports the bundled using-gitee-cli skill; it does not scan all installed skills.",
         ],
     )
