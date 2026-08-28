@@ -2,6 +2,10 @@
 
 Load this file for pull request workflows.
 
+Unless noted, every command here supports `--json` and infers `--repo` from the
+current local checkout. The exception is `gitee pr status`, which never infers
+and requires a local checkout plus authentication.
+
 ## `gitee pr list`
 
 - `gh` equivalent: `gh pr list`
@@ -23,9 +27,6 @@ gitee pr list [--repo <OWNER/REPO>] [--state <STATE>] [--author <LOGIN>] [--assi
   - `--base <BRANCH>`: filter by base branch
   - `--head <BRANCH>`: filter by head branch
   - `--limit <N>`: maximum number of PRs to return
-  - `--json`: output machine-readable JSON
-- Notes:
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -50,9 +51,6 @@ gitee pr view <PR> [--repo <OWNER/REPO>] [--json]
   - `<PR>`: pull request number
 - Flags:
   - `--repo <OWNER/REPO>`: target repository
-  - `--json`: output machine-readable JSON
-- Notes:
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -80,11 +78,9 @@ gitee pr create [--repo <OWNER/REPO>] [--head <BRANCH>] [--base <BRANCH>] --titl
   - `--title <TITLE>`: required pull request title
   - `--body <TEXT>`: inline body
   - `--body-file <PATH>`: read body from a file
-  - `--json`: output machine-readable JSON
 - Notes:
   - `--title` is required.
   - Provide at most one of `--body` or `--body-file`.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -115,12 +111,10 @@ gitee pr edit <PR> [--repo <OWNER/REPO>] [--title <TITLE>] [--body <TEXT> | --bo
   - `--state <STATE>`: `open` or `closed`
   - `--draft`: mark as draft
   - `--ready`: mark as ready
-  - `--json`: output machine-readable JSON
 - Notes:
   - Provide at least one of `--title`, `--body`, `--body-file`, `--state`, `--draft`, or `--ready`.
   - Provide at most one of `--body` or `--body-file`.
   - Provide at most one of `--draft` or `--ready`.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -148,11 +142,9 @@ gitee pr merge <PR> [--repo <OWNER/REPO>] [--merge | --squash | --rebase] [--jso
   - `--merge`: merge the pull request
   - `--squash`: squash and merge the pull request
   - `--rebase`: rebase and merge the pull request
-  - `--json`: output machine-readable JSON
 - Notes:
   - Provide at most one of `--merge`, `--squash`, or `--rebase`.
   - When no merge strategy flag is provided, the command uses the default merge strategy.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -179,10 +171,8 @@ gitee pr comment <PR> [--repo <OWNER/REPO>] [--body <TEXT> | --body-file <PATH>]
   - `--repo <OWNER/REPO>`: target repository
   - `--body <TEXT>`: inline comment body
   - `--body-file <PATH>`: read comment body from a file
-  - `--json`: output machine-readable JSON
 - Notes:
   - Provide exactly one of `--body` or `--body-file`.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -211,13 +201,11 @@ gitee pr review <PR> [--repo <OWNER/REPO>] (--approve | --comment) [--body <TEXT
   - `-c, --comment`: post review feedback
   - `-b, --body <TEXT>`: inline review body
   - `-F, --body-file <PATH>`: read review body from a file; use `-` for stdin
-  - `--json`: output machine-readable JSON
 - Notes:
   - Provide exactly one of `--approve` or `--comment`.
   - Comment reviews require exactly one body source.
   - Approval reviews do not accept `--body` or `--body-file`.
   - Gitee does not expose a GitHub-style request-changes review state, so this command does not provide `--request-changes`.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -242,7 +230,6 @@ gitee pr status [--state <STATE>] [--limit <N>] [--json]
 - Flags:
   - `--state <STATE>`: `open`, `closed`, `merged`, or `all`
   - `--limit <N>`: maximum number of PRs to return
-  - `--json`: output machine-readable JSON
 - Notes:
   - Requires a local git checkout and authentication.
 - Examples:
@@ -269,10 +256,8 @@ gitee pr checkout <PR> [--repo <OWNER/REPO>] [--json]
   - `<PR>`: pull request number
 - Flags:
   - `--repo <OWNER/REPO>`: target repository
-  - `--json`: output machine-readable JSON
 - Notes:
   - Requires a local git checkout with an `origin` remote.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash

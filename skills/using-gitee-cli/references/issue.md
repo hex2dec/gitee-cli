@@ -2,6 +2,9 @@
 
 Load this file for issue read/write flows.
 
+Unless noted, every command here supports `--json` and infers `--repo` from the
+current local checkout.
+
 ## `gitee issue list`
 
 - `gh` equivalent: `gh issue list`
@@ -21,9 +24,6 @@ gitee issue list [--repo <OWNER/REPO>] [--state <STATE>] [--search <TEXT>] [--pa
   - `--search <TEXT>`: filter by keyword text
   - `--page <N>`: 1-based page number
   - `--per-page <N>`: results per page
-  - `--json`: output machine-readable JSON
-- Notes:
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -51,7 +51,6 @@ gitee issue view <ISSUE> [--repo <OWNER/REPO>] [--comments] [--page <N>] [--per-
   - `--comments`: include issue comments
   - `--page <N>`: comment page number
   - `--per-page <N>`: comment page size
-  - `--json`: output machine-readable JSON
 - Notes:
   - Comments are fetched only when `--comments` is provided.
 - Examples:
@@ -79,11 +78,9 @@ gitee issue create [--repo <OWNER/REPO>] --title <TITLE> [--body <TEXT> | --body
   - `--title <TITLE>`: required issue title
   - `--body <TEXT>`: inline issue body
   - `--body-file <PATH>`: read issue body from a file
-  - `--json`: output machine-readable JSON
 - Notes:
   - `--title` is required.
   - Provide at most one of `--body` or `--body-file`.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -117,7 +114,6 @@ gitee issue edit <ISSUE> [--repo <OWNER/REPO>] [--title <TITLE>] [--body <TEXT> 
   - Provide at least one of `--title`, `--body`, `--body-file`, or `--state`.
   - Provide at most one of `--body` or `--body-file`.
   - Only one issue can be edited per command.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
@@ -145,10 +141,8 @@ gitee issue comment <ISSUE> [--repo <OWNER/REPO>] [--body <TEXT> | --body-file <
   - `--repo <OWNER/REPO>`: target repository
   - `--body <TEXT>`: inline comment body
   - `--body-file <PATH>`: read comment body from a file
-  - `--json`: output machine-readable JSON
 - Notes:
   - Provide exactly one of `--body` or `--body-file`.
-  - When `--repo` is omitted, the command can infer the repository from local git context.
 - Examples:
 
 ```bash
