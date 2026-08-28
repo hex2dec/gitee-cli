@@ -2,6 +2,9 @@
 
 Load this file for repository inspection and clone workflows.
 
+Unless noted, every command here supports `--json`; `gitee repo view` infers
+`--repo` from the local checkout, `gitee repo clone` does not.
+
 ## `gitee repo view`
 
 - `gh` equivalent: `gh repo view`
@@ -17,7 +20,6 @@ gitee repo view [--repo <OWNER/REPO>] [--json]
 
 - Flags:
   - `--repo <OWNER/REPO>`: target repository; defaults to local git context when supported
-  - `--json`: output machine-readable JSON
 - Notes:
   - Use `--repo` when you are outside a local checkout.
 - Examples:
@@ -46,7 +48,6 @@ gitee repo clone <OWNER/REPO> [DESTINATION] [--https | --ssh] [--json]
 - Flags:
   - `--https`: clone over HTTPS
   - `--ssh`: clone over SSH
-  - `--json`: output machine-readable JSON
 - Notes:
   - Use at most one of `--https` or `--ssh`.
   - When neither is provided, the CLI uses a saved clone protocol preference or prompts on first use.
